@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+<meta name="theme-color" content="#1d5c43" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="자산관리" />
+<title>자산·대출 관리</title>
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Crect width='180' height='180' rx='40' fill='%231d5c43'/%3E%3Ctext x='90' y='118' font-size='90' text-anchor='middle' fill='white' font-family='sans-serif' font-weight='bold'%3E₩%3C/text%3E%3C/svg%3E" />
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; margin: 0; padding: 0; }
+  :root {
+    --ink:#12131a; --sub:#6b7280; --line:#ececf0; --card:#fff;
+    --accent:#3b5bdb; --hot:#e8590c; --good:#2f9e44;
+    --bg:#f6f6f8;
+  }
+  html,body { background:var(--bg); }
+  body { font-family:'Pretendard',-apple-system,BlinkMacSystemFont,system-ui,sans-serif; color:var(--ink); padding-bottom:40px; }
+  #app { max-width:460px; margin:0 auto; min-height:100vh; }
+  button { font-family:inherit; cursor:pointer; border:none; background:none; color:inherit; }
+  input { font-family:inherit; }
+  input[type=number]::-webkit-outer-spin-button,
+  input[type=number]::-webkit-inner-spin-button { -webkit-appearance:none; margin:0; }
+  input[type=number] { -moz-appearance:textfield; }
+
+  header { color:#fff; padding:22px 20px 20px; border-radius:0 0 24px 24px; transition:background .4s; }
+  .htop { display:flex; align-items:center; gap:7px; margin-bottom:16px; }
+  .dot { width:8px; height:8px; border-radius:4px; }
+  .brand { font-size:13px; font-weight:600; letter-spacing:.3px; color:rgba(255,255,255,.8); }
+  .netlabel { font-size:12px; color:rgba(255,255,255,.7); margin-bottom:4px; }
+  .netval { font-size:36px; font-weight:800; letter-spacing:-1px; line-height:1; }
+  .netval small { font-size:17px; font-weight:600; margin-left:4px; color:rgba(255,255,255,.75); }
+  .nettag { display:inline-flex; align-items:center; gap:4px; font-size:12px; color:rgba(255,255,255,.9); margin-top:10px; background:rgba(255,255,255,.12); padding:5px 10px; border-radius:20px; }
+  .mrow { display:flex; align-items:center; margin-top:18px; background:rgba(255,255,255,.08); border-radius:14px; padding:12px 4px; }
+  .metric { flex:1; text-align:center; }
+  .mdiv { width:1px; height:30px; background:rgba(255,255,255,.16); }
+  .mlabel { font-size:10.5px; color:rgba(255,255,255,.6); margin-bottom:4px; }
+  .mval { font-size:14.5px; font-weight:700; }
+
+  .progwrap { padding:16px 20px 4px; }
+  .progtext { display:flex; justify-content:space-between; font-size:12.5px; font-weight:600; color:var(--sub); margin-bottom:8px; }
+  .progtext b { color:var(--accent); font-weight:700; }
+  .progbar { height:7px; background:#e4e4ea; border-radius:4px; overflow:hidden; }
+  .progfill { height:100%; background:var(--good); border-radius:4px; transition:width .3s; }
+
+  nav { display:flex; gap:4px; padding:12px 12px 4px; overflow-x:auto; }
+  nav button { flex-shrink:0; padding:9px 13px; font-size:12.5px; font-weight:600; color:var(--sub); border-radius:10px; white-space:nowrap; }
+  nav button.on { background:var(--ink); color:#fff; }
+
+  main { padding:12px 16px; }
+  .hint { display:flex; align-items:center; gap:6px; font-size:12px; color:var(--sub); margin:4px 2px 12px; line-height:1.4; }
+
+  .agroup { margin-bottom:16px; }
+  .ghead { display:flex; align-items:center; gap:7px; margin:0 2px 8px; }
+  .gname { font-size:13px; font-weight:700; }
+  .gsum { margin-left:auto; font-size:13px; font-weight:700; color:var(--sub); }
+  .acard { background:var(--card); border-radius:12px; padding:13px 14px; margin-bottom:7px; border:1px solid var(--line); transition:border-color .15s, box-shadow .15s; }
+  .acard.focus { border-color:var(--accent); box-shadow:0 0 0 3px rgba(59,91,219,.08); }
+  .atop { display:flex; align-items:center; justify-content:space-between; }
+  .aname { font-size:14.5px; font-weight:600; }
+  .aright { display:flex; align-items:center; gap:6px; }
+  .ainput { width:130px; padding:8px 10px; font-size:16px; font-weight:700; text-align:right; border:1.5px solid var(--line); border-radius:9px; outline:none; background:#fafafb; color:var(--ink); }
+  .ainput.focus { border-color:var(--accent); background:#fff; }
+  .awon { font-size:13px; color:var(--sub); font-weight:600; }
+  .del { color:#c0c0c8; padding:4px; display:flex; }
+  .prevhint { margin-top:10px; padding-top:10px; border-top:1px dashed var(--line); font-size:12.5px; color:var(--sub); }
+  .prevhint b { color:var(--ink); }
+
+  .addbtn { display:flex; align-items:center; justify-content:center; gap:6px; width:100%; padding:13px; background:var(--ink); color:#fff; border-radius:14px; font-size:14px; font-weight:700; margin-top:4px; }
+
+  .histhead { display:flex; align-items:center; gap:8px; margin:24px 2px 12px; }
+  .histtitle { font-size:14px; font-weight:800; }
+  .histcount { font-size:11px; font-weight:700; color:var(--accent); background:#eef1fd; padding:2px 8px; border-radius:10px; }
+  .histempty { font-size:12.5px; color:var(--sub); background:#fbfbfc; border:1px dashed var(--line); border-radius:12px; padding:16px; text-align:center; line-height:1.5; }
+  .histcard { display:flex; justify-content:space-between; align-items:flex-start; background:var(--card); border-radius:12px; padding:12px 14px; margin-bottom:7px; border:1px solid var(--line); }
+  .hdate { font-size:11px; color:var(--sub); font-weight:600; margin-bottom:3px; }
+  .hname { font-size:14px; font-weight:700; }
+  .hreason { font-size:12px; color:var(--sub); margin-top:3px; }
+  .hright { text-align:right; flex-shrink:0; margin-left:10px; }
+  .hdelta { font-size:14.5px; font-weight:800; }
+  .hflow { font-size:11px; color:var(--sub); margin-top:3px; }
+  .histmore { width:100%; padding:11px; background:#f2f2f5; color:var(--sub); border-radius:11px; font-size:13px; font-weight:600; margin-top:2px; }
+
+  .paycard { display:flex; align-items:center; gap:12px; background:var(--card); border-radius:14px; padding:13px 14px; margin-bottom:8px; border:1px solid var(--line); }
+  .paycard.urgent { border:1px solid #f5c6a5; background:#fffaf5; }
+  .paycard.done { background:#fbfbfc; }
+  .chk { padding:2px; display:flex; }
+  .chkempty { width:22px; height:22px; border-radius:11px; border:2px solid #cfcfd6; display:block; }
+  .chkdone { width:22px; height:22px; border-radius:11px; background:var(--good); color:#fff; display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:900; }
+  .pinfo { flex:1; min-width:0; }
+  .plender { font-size:15px; font-weight:700; }
+  .plender.struck { text-decoration:line-through; color:#8a8f98; }
+  .pmeta { font-size:11.5px; color:var(--sub); margin-top:3px; }
+  .pright { text-align:right; }
+  .pamt { font-size:15px; font-weight:700; }
+  .pamt.mut { color:#8a8f98; }
+  .pdday { font-size:11px; font-weight:700; color:var(--sub); margin-top:3px; }
+  .pdday.urgent { color:var(--hot); }
+  .donecard { display:flex; align-items:center; justify-content:center; gap:8px; background:#eefaf1; color:var(--good); font-weight:600; font-size:14px; padding:20px; border-radius:14px; }
+  .paidhead { font-size:12px; font-weight:700; color:var(--sub); margin:18px 2px 8px; }
+
+  .monthcard { background:var(--card); border-radius:14px; margin-bottom:8px; border:1px solid var(--line); overflow:hidden; }
+  .monthcard.cur { border:1.5px solid var(--accent); }
+  .mhead { width:100%; display:flex; align-items:center; justify-content:space-between; padding:14px; }
+  .mleft { display:flex; align-items:center; gap:8px; }
+  .mnum { font-size:15px; font-weight:800; }
+  .mnum.cur { color:var(--accent); }
+  .curbadge { font-size:10px; font-weight:700; color:var(--accent); background:#eef1fd; padding:2px 7px; border-radius:6px; }
+  .mright { display:flex; align-items:center; gap:8px; }
+  .mtotal { font-size:15px; font-weight:700; }
+  .chev { color:#adb5bd; transition:transform .15s; font-size:14px; }
+  .chev.open { transform:rotate(90deg); }
+  .mbody { padding:2px 14px 12px; border-top:1px solid var(--line); }
+  .mitem { display:flex; align-items:center; gap:8px; padding:8px 0; font-size:13px; border-bottom:1px solid #f5f5f7; }
+  .mitem:last-child { border-bottom:none; }
+  .miday { width:34px; color:var(--sub); font-size:12px; font-weight:600; }
+  .miname { flex:1; font-weight:600; }
+  .mitype { font-size:11px; color:var(--sub); background:#f2f2f5; padding:2px 7px; border-radius:6px; }
+  .miamt { font-weight:700; min-width:68px; text-align:right; }
+
+  .priocard { display:flex; align-items:center; gap:12px; background:var(--card); border-radius:14px; padding:13px 14px; margin-bottom:8px; border:1px solid var(--line); }
+  .rank { width:26px; height:26px; border-radius:8px; background:#eef0f5; color:var(--sub); font-size:13px; font-weight:800; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+  .rank.hot { background:#fff1e8; color:var(--hot); }
+  .prinfo { flex:1; min-width:0; }
+  .prright { display:flex; flex-direction:column; align-items:flex-end; gap:6px; }
+  .ratebadge { font-size:13px; font-weight:800; color:var(--sub); }
+  .ratebadge.hot { color:var(--hot); }
+  .simbtn { display:flex; align-items:center; gap:2px; font-size:11.5px; font-weight:700; color:var(--accent); background:#eef1fd; padding:5px 8px 5px 10px; border-radius:8px; }
+
+  .tip { display:flex; gap:10px; background:#fff8f2; border:1px solid #f3d9c4; border-radius:14px; padding:14px; font-size:12.5px; line-height:1.5; color:#7a4a26; margin-top:6px; }
+  .tip.warn { background:#fff5f5; border-color:#f5c2c2; color:#8a2a2a; }
+
+  .allcard { background:var(--card); border-radius:14px; padding:14px; margin-bottom:8px; border:1px solid var(--line); }
+  .alltop { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
+  .allgrid { display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:8px; }
+  .clabel { font-size:10.5px; color:var(--sub); margin-bottom:3px; }
+  .cval { font-size:13px; font-weight:700; }
+  .alltag { font-size:11px; color:var(--sub); margin-top:10px; padding-top:10px; border-top:1px solid var(--line); }
+
+  .modalbg { position:fixed; inset:0; background:rgba(10,10,15,.5); display:flex; align-items:flex-end; justify-content:center; z-index:50; }
+  .modal { width:100%; max-width:460px; background:#fff; border-radius:22px 22px 0 0; padding:20px 20px 30px; max-height:88vh; overflow-y:auto; animation:slideup .22s ease; }
+  @keyframes slideup { from { transform:translateY(100%); } to { transform:translateY(0); } }
+  .mdhead { display:flex; justify-content:space-between; align-items:center; font-size:17px; font-weight:800; margin-bottom:4px; }
+  .mdclose { color:var(--sub); padding:4px; font-size:18px; }
+  .mdsub { font-size:12.5px; color:var(--sub); margin-bottom:8px; }
+  label.lbl { display:block; font-size:12px; font-weight:600; color:var(--sub); margin:12px 2px 6px; }
+  label.lbl span { color:var(--sub); font-weight:400; }
+  .in { width:100%; padding:13px 14px; font-size:16px; border:1.5px solid var(--line); border-radius:12px; outline:none; background:#fafafb; }
+  .frow { display:flex; gap:10px; }
+  .segrow { display:flex; gap:8px; }
+  .seg { flex:1; padding:11px; font-size:13px; font-weight:600; border-radius:11px; background:#f2f2f5; color:var(--sub); }
+  .seg.on { background:var(--ink); color:#fff; }
+  .apply { width:100%; padding:14px; background:var(--accent); color:#fff; border-radius:13px; font-size:15px; font-weight:700; margin-top:18px; }
+  .apply:disabled { opacity:.4; }
+  .skip { width:100%; padding:12px; background:transparent; color:var(--sub); font-size:13px; font-weight:600; margin-top:8px; }
+  .simres { background:#f7f8fc; border-radius:12px; padding:14px; margin-top:16px; }
+  .simrow { display:flex; justify-content:space-between; font-size:13px; padding:5px 0; }
+  .simrow.save { color:var(--good); font-weight:700; border-top:1px solid var(--line); margin-top:4px; padding-top:10px; }
+  .rflow { display:flex; align-items:center; gap:8px; background:#f7f8fc; border-radius:12px; padding:13px 14px; font-size:14px; margin:8px 0 4px; }
+  .presetrow { display:flex; flex-wrap:wrap; gap:8px; }
+  .preset { padding:9px 13px; font-size:13px; font-weight:600; border-radius:20px; background:#f2f2f5; color:var(--sub); }
+  .preset.on { background:var(--ink); color:#fff; }
+
+  .installbar { position:fixed; bottom:0; left:0; right:0; max-width:460px; margin:0 auto; background:var(--ink); color:#fff; padding:14px 18px; display:flex; align-items:center; gap:12px; z-index:40; }
+  .installbar b { font-size:13.5px; }
+  .installbar p { font-size:11.5px; color:rgba(255,255,255,.7); margin-top:2px; }
+  .installbar button { margin-left:auto; background:#fff; color:var(--ink); font-weight:700; font-size:13px; padding:9px 14px; border-radius:10px; flex-shrink:0; }
+  .savedtoast { position:fixed; bottom:24px; left:50%; transform:translateX(-50%); background:rgba(20,20,25,.92); color:#fff; font-size:12.5px; font-weight:600; padding:9px 16px; border-radius:20px; z-index:60; opacity:0; transition:opacity .2s; pointer-events:none; }
+  .savedtoast.show { opacity:1; }
+
+  .lockscreen { position:fixed; inset:0; background:linear-gradient(160deg,#12352a,#1d5c43); display:flex; flex-direction:column; align-items:center; justify-content:center; z-index:100; padding:0 32px; }
+  .lockicon { font-size:40px; margin-bottom:18px; }
+  .locktitle { color:#fff; font-size:19px; font-weight:800; margin-bottom:6px; }
+  .locksub { color:rgba(255,255,255,.7); font-size:13px; margin-bottom:32px; text-align:center; line-height:1.5; }
+  .pindots { display:flex; gap:16px; margin-bottom:14px; }
+  .pindot { width:15px; height:15px; border-radius:50%; border:2px solid rgba(255,255,255,.5); transition:all .15s; }
+  .pindot.filled { background:#fff; border-color:#fff; }
+  .pinerr { color:#ff8a9b; font-size:13px; font-weight:600; height:20px; margin-bottom:14px; }
+  .pinpad { display:grid; grid-template-columns:repeat(3,74px); gap:16px; }
+  .pinkey { height:74px; border-radius:50%; background:rgba(255,255,255,.1); color:#fff; font-size:26px; font-weight:600; display:flex; align-items:center; justify-content:center; transition:background .1s; }
+  .pinkey:active { background:rgba(255,255,255,.25); }
+  .pinkey.blank { background:transparent; }
+  .pinkey.fn { font-size:14px; font-weight:600; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<script>
+// ═══════════════ 데이터 ═══════════════
+const DEFAULT_LOANS = [
+  { id:1, lender:"SBI저축", balance:48000000, orig:48000000, rate:14.20, type:"원리금", months:60, payDay:15, startYM:"2026-09", firstYM:"2026-08", firstAmount:298783, note:"8월 이자만 298,783원, 9월부터 원리금" },
+  { id:2, lender:"우리금융", balance:9144917, orig:12000000, rate:13.10, type:"원리금", months:12, payDay:1, startYM:"2026-01", note:"" },
+  { id:3, lender:"케이뱅크", balance:5656106, orig:11000000, rate:11.63, type:"원리금", months:12, payDay:2, startYM:"2026-01", note:"" },
+  { id:4, lender:"카카오(3)", balance:2000000, orig:2000000, rate:9.030, type:"이자만", months:0, payDay:10, startYM:"2026-01", note:"만기일시" },
+  { id:5, lender:"광주은행(2)", balance:1424997, orig:1900000, rate:7.53, type:"원리금", months:12, payDay:21, startYM:"2026-01", note:"" },
+  { id:6, lender:"광주은행(1)", balance:2500000, orig:2500000, rate:6.34, type:"이자만", months:0, payDay:1, startYM:"2026-01", note:"만기일시" },
+  { id:7, lender:"카카오(2)", balance:9800000, orig:9800000, rate:6.094, type:"이자만", months:0, payDay:31, startYM:"2026-01", note:"만기일시" },
+  { id:8, lender:"카카오(1)", balance:6100000, orig:6100000, rate:5.688, type:"이자만", months:0, payDay:31, startYM:"2026-01", note:"만기일시" },
+];
+const DEFAULT_ASSETS = [
+  { id:104, name:"키움 계좌1", kind:"주식", amount:0 },
+  { id:106, name:"키움 계좌2", kind:"주식", amount:0 },
+  { id:101, name:"카카오뱅크", kind:"예금", amount:0 },
+  { id:102, name:"KB국민", kind:"예금", amount:0 },
+  { id:103, name:"우리은행", kind:"예금", amount:0 },
+  { id:105, name:"부산은행", kind:"예금", amount:0 },
+];
+const KIND_COLORS = { 주식:"#e8590c", 예금:"#2f9e44", 현금:"#3b5bdb", 기타:"#868e96" };
+const MONTHS_2026 = Array.from({length:12},(_,i)=>`2026-${String(i+1).padStart(2,"0")}`);
+
+// ═══════════════ 저장소 ═══════════════
+const DB = "assetmgr_v1";
+function load() {
+  try {
+    const raw = localStorage.getItem(DB);
+    if (!raw) return { loans:DEFAULT_LOANS, assets:DEFAULT_ASSETS, paid:{}, history:[] };
+    const d = JSON.parse(raw);
+    return { loans:d.loans||DEFAULT_LOANS, assets:d.assets||DEFAULT_ASSETS, paid:d.paid||{}, history:d.history||[] };
+  } catch(e) { return { loans:DEFAULT_LOANS, assets:DEFAULT_ASSETS, paid:{}, history:[] }; }
+}
+function save() {
+  try {
+    localStorage.setItem(DB, JSON.stringify({ loans:state.loans, assets:state.assets, paid:state.paid, history:state.history }));
+    showSaved();
+  } catch(e) {}
+}
+let saveTimer=null;
+function showSaved(){
+  clearTimeout(saveTimer);
+  let t=document.querySelector(".savedtoast");
+  if(!t){ t=document.createElement("div"); t.className="savedtoast"; t.textContent="저장됨"; document.body.appendChild(t); }
+  requestAnimationFrame(()=>t.classList.add("show"));
+  saveTimer=setTimeout(()=>t.classList.remove("show"),1200);
+}
+
+// ═══════════════ 계산 ═══════════════
+const won = n => Math.round(n).toLocaleString("ko-KR");
+const monthlyInterest = (bal,rate) => bal*(rate/100)/12;
+function amort(p,rate,m){ if(m<=0) return 0; const r=rate/100/12; if(r===0) return p/m; return p*r*Math.pow(1+r,m)/(Math.pow(1+r,m)-1); }
+function fixedMonthly(l){ if(l.type!=="원리금") return monthlyInterest(l.balance,l.rate); return amort(l.orig||l.balance, l.rate, l.months); }
+const monthlyPayment = l => fixedMonthly(l);
+function paymentInMonth(l, ym){
+  if(l.firstYM && l.firstYM===ym) return l.firstAmount;
+  if(l.type==="원리금"){
+    const [sy,sm]=l.startYM.split("-").map(Number);
+    const [y,m]=ym.split("-").map(Number);
+    const idx=(y-sy)*12+(m-sm);
+    if(idx<0||idx>=l.months) return 0;
+    return fixedMonthly(l);
+  }
+  return monthlyInterest(l.balance, l.rate);
+}
+
+// ═══════════════ 상태 ═══════════════
+let state = load();
+let ui = { tab:"net", openMonth:null, focusAsset:null, draft:"", showAllHist:false, modal:null };
+const today = new Date();
+const curDay = today.getDate();
+const curYM = `2026-${String(today.getMonth()+1).padStart(2,"0")}`;
+
+// ═══════════════ 렌더 ═══════════════
+const app = document.getElementById("app");
+function h(html){ const d=document.createElement("div"); d.innerHTML=html.trim(); return d.firstElementChild; }
+
+function render(){
+  const totalDebt = state.loans.reduce((s,l)=>s+l.balance,0);
+  const totalAsset = state.assets.reduce((s,a)=>s+a.amount,0);
+  const net = totalAsset - totalDebt;
+  const mInt = state.loans.reduce((s,l)=>s+monthlyInterest(l.balance,l.rate),0);
+  const paidCount = state.loans.filter(l=>state.paid[l.id]).length;
+
+  app.innerHTML = "";
+  // 헤더
+  const headBg = net>=0 ? "linear-gradient(160deg,#12352a,#1d5c43)" : "linear-gradient(160deg,#3a1720,#6b2331)";
+  app.appendChild(h(`
+    <header style="background:${headBg}">
+      <div class="htop"><span class="dot" style="background:${net>=0?'#5be3a5':'#ff8a9b'}"></span><span class="brand">실질 자산 현황</span><button class="lockbtn" style="margin-left:auto;color:rgba(255,255,255,.6);font-size:16px;padding:2px 6px">🔒</button></div>
+      <div class="netlabel">순자산 (자산 − 부채)</div>
+      <div class="netval">${net>=0?'+':'−'}${won(Math.abs(net))}<small>원</small></div>
+      <div class="nettag">${net>=0 ? '▲ 자산이 부채보다 많습니다' : '▼ 부채가 자산보다 '+won(Math.abs(net))+'원 많습니다'}</div>
+      <div class="mrow">
+        <div class="metric"><div class="mlabel">총 자산</div><div class="mval">${won(totalAsset)}</div></div>
+        <div class="mdiv"></div>
+        <div class="metric"><div class="mlabel">총 부채</div><div class="mval">${won(totalDebt)}</div></div>
+        <div class="mdiv"></div>
+        <div class="metric"><div class="mlabel">월 이자</div><div class="mval">${won(mInt)}</div></div>
+      </div>
+    </header>
+    <div class="progwrap">
+      <div class="progtext"><span>이번 달 납입 체크</span><b>${paidCount} / ${state.loans.length}</b></div>
+      <div class="progbar"><div class="progfill" style="width:${paidCount/Math.max(state.loans.length,1)*100}%"></div></div>
+    </div>
+  `));
+  const lb = app.querySelector(".lockbtn");
+  if(lb) lb.onclick = ()=>{ ui.modal={type:"lockset"}; render(); };
+
+  // 탭
+  const nav = h(`<nav></nav>`);
+  [["net","자산"],["home","납입"],["year","2026 일정"],["priority","상환순서"],["all","대출"]].forEach(([k,label])=>{
+    const b=h(`<button class="${ui.tab===k?'on':''}">${label}</button>`);
+    b.onclick=()=>{ ui.tab=k; render(); };
+    nav.appendChild(b);
+  });
+  app.appendChild(nav);
+
+  const main = h(`<main></main>`);
+  app.appendChild(main);
+  if(ui.tab==="net") renderAssets(main, totalAsset);
+  else if(ui.tab==="home") renderHome(main);
+  else if(ui.tab==="year") renderYear(main);
+  else if(ui.tab==="priority") renderPriority(main);
+  else if(ui.tab==="all") renderAll(main);
+
+  if(ui.modal) renderModal();
+  maybeInstallBar();
+}
+
+function renderAssets(main, totalAsset){
+  main.appendChild(h(`<div class="hint">💰 예금·주식 계좌를 개별 관리하세요. 입력창을 누르면 기존 금액이 아래에 표시됩니다.</div>`));
+  ["주식","예금","현금","기타"].forEach(kind=>{
+    const list = state.assets.filter(a=>a.kind===kind);
+    if(!list.length) return;
+    const sum = list.reduce((s,a)=>s+a.amount,0);
+    const g = h(`<div class="agroup">
+      <div class="ghead"><span class="dot" style="background:${KIND_COLORS[kind]}"></span><span class="gname">${kind}</span><span class="gsum">${won(sum)}원</span></div>
+    </div>`);
+    list.forEach(a=>{
+      const isFocus = ui.focusAsset===a.id;
+      const draftNum = Number(ui.draft)||0;
+      const card = h(`<div class="acard ${isFocus?'focus':''}">
+        <div class="atop">
+          <div class="aname">${a.name}</div>
+          <div class="aright">
+            <input class="ainput ${isFocus?'focus':''}" type="number" inputmode="numeric" placeholder="0" value="${isFocus?ui.draft:(a.amount===0?'':a.amount)}" />
+            <span class="awon">원</span>
+            <button class="del">🗑</button>
+          </div>
+        </div>
+        ${isFocus?`<div class="prevhint">기존 보유금액 <b>${won(a.amount)}원</b>${draftNum>0&&draftNum!==a.amount?` <span style="color:${draftNum>a.amount?'var(--good)':'var(--hot)'};font-weight:700;margin-left:8px">${draftNum>a.amount?'▲':'▼'} ${won(Math.abs(draftNum-a.amount))}</span>`:''}</div>`:''}
+      </div>`);
+      const input = card.querySelector(".ainput");
+      input.onfocus = ()=>{ ui.focusAsset=a.id; ui.draft=(a.amount===0?'':String(a.amount)); render(); setTimeout(()=>{ const el=app.querySelector(".acard.focus .ainput"); if(el){el.focus();} },0); };
+      input.oninput = (e)=>{ ui.draft=e.target.value; const hint=card.querySelector(".prevhint"); const dn=Number(e.target.value)||0; if(hint){ hint.innerHTML=`기존 보유금액 <b>${won(a.amount)}원</b>${dn>0&&dn!==a.amount?` <span style="color:${dn>a.amount?'var(--good)':'var(--hot)'};font-weight:700;margin-left:8px">${dn>a.amount?'▲':'▼'} ${won(Math.abs(dn-a.amount))}</span>`:''}`; } };
+      input.onblur = ()=>{ const next=Number(ui.draft)||0; if(next!==a.amount){ ui.modal={type:"reason", id:a.id, name:a.name, prev:a.amount, next}; render(); } else { ui.focusAsset=null; render(); } };
+      card.querySelector(".del").onclick = ()=>{ state.assets=state.assets.filter(x=>x.id!==a.id); save(); render(); };
+      g.appendChild(card);
+    });
+    main.appendChild(g);
+  });
+  const add = h(`<button class="addbtn">＋ 계좌·자산 추가</button>`);
+  add.onclick=()=>{ ui.modal={type:"addAsset"}; render(); };
+  main.appendChild(add);
+
+  // 변동내역
+  main.appendChild(h(`<div class="histhead"><span class="histtitle">자산 변동내역</span>${state.history.length?`<span class="histcount">${state.history.length}건</span>`:''}</div>`));
+  if(!state.history.length){
+    main.appendChild(h(`<div class="histempty">아직 변동내역이 없습니다.<br>주식·예금 금액을 수정하면 일자별로 기록됩니다.</div>`));
+  } else {
+    const shown = ui.showAllHist ? state.history : state.history.slice(0,5);
+    shown.forEach(hh=>{
+      const up = hh.next>=hh.prev;
+      main.appendChild(h(`<div class="histcard">
+        <div><div class="hdate">${hh.date}</div><div class="hname">${hh.name}</div><div class="hreason">${hh.reason||'사유 없음'}</div></div>
+        <div class="hright"><div class="hdelta" style="color:${up?'var(--good)':'var(--hot)'}">${up?'+':'−'}${won(Math.abs(hh.next-hh.prev))}</div><div class="hflow">${won(hh.prev)} → ${won(hh.next)}</div></div>
+      </div>`));
+    });
+    if(state.history.length>5){
+      const mb=h(`<button class="histmore">${ui.showAllHist?'접기':'전체 '+state.history.length+'건 보기'}</button>`);
+      mb.onclick=()=>{ ui.showAllHist=!ui.showAllHist; render(); };
+      main.appendChild(mb);
+    }
+  }
+  main.appendChild(h(`<div class="tip">ℹ️ 대출을 갚거나 자산이 늘면 위쪽 <b>순자산</b>이 실시간으로 바뀝니다. 목표는 순자산을 <b>+</b>로 만드는 것입니다.</div>`));
+}
+
+function renderHome(main){
+  const sched = [...state.loans].filter(l=>!state.paid[l.id]).map(l=>{
+    const diff = l.payDay>=curDay ? l.payDay-curDay : l.payDay+31-curDay;
+    return {...l, diff};
+  }).sort((a,b)=>a.diff-b.diff);
+  main.appendChild(h(`<div class="hint">📅 납입일이 가까운 순서. 체크하면 완료 처리됩니다.</div>`));
+  if(!sched.length) main.appendChild(h(`<div class="donecard">✓ 이번 달 납입을 모두 체크했습니다.</div>`));
+  sched.forEach(l=>{
+    const card=h(`<div class="paycard ${l.diff<=2?'urgent':''}">
+      <button class="chk"><span class="chkempty"></span></button>
+      <div class="pinfo"><div class="plender">${l.lender}</div><div class="pmeta">매월 ${l.payDay}일 · ${l.type} · ${l.rate.toFixed(2)}%</div></div>
+      <div class="pright"><div class="pamt">${won(monthlyPayment(l))}</div><div class="pdday ${l.diff<=2?'urgent':''}">${l.diff===0?'오늘':'D-'+l.diff}</div></div>
+    </div>`);
+    card.querySelector(".chk").onclick=()=>{ state.paid[l.id]=true; save(); render(); };
+    main.appendChild(card);
+  });
+  const done = state.loans.filter(l=>state.paid[l.id]);
+  if(done.length){
+    main.appendChild(h(`<div class="paidhead">납입 완료</div>`));
+    done.forEach(l=>{
+      const card=h(`<div class="paycard done">
+        <button class="chk"><span class="chkdone">✓</span></button>
+        <div class="pinfo"><div class="plender struck">${l.lender}</div><div class="pmeta">완료</div></div>
+        <div class="pamt mut">${won(monthlyPayment(l))}</div>
+      </div>`);
+      card.querySelector(".chk").onclick=()=>{ delete state.paid[l.id]; save(); render(); };
+      main.appendChild(card);
+    });
+  }
+}
+
+function renderYear(main){
+  main.appendChild(h(`<div class="hint">📅 2026년 월별 상환 예정액(최초 원금 기준). 월을 누르면 상세가 열립니다.</div>`));
+  MONTHS_2026.forEach(ym=>{
+    const mm=Number(ym.split("-")[1]);
+    const items=state.loans.map(l=>({loan:l, amt:paymentInMonth(l,ym)})).filter(x=>x.amt>0).sort((a,b)=>a.loan.payDay-b.loan.payDay);
+    const total=items.reduce((s,x)=>s+x.amt,0);
+    const isCur=ym===curYM, isOpen=ui.openMonth===ym;
+    const card=h(`<div class="monthcard ${isCur?'cur':''}">
+      <button class="mhead"><div class="mleft"><span class="mnum ${isCur?'cur':''}">${mm}월</span>${isCur?'<span class="curbadge">이번 달</span>':''}</div><div class="mright"><span class="mtotal">${won(total)}원</span><span class="chev ${isOpen?'open':''}">▶</span></div></button>
+      ${isOpen?`<div class="mbody">${items.map(({loan,amt})=>`<div class="mitem"><span class="miday">${loan.payDay}일</span><span class="miname">${loan.lender}</span><span class="mitype">${loan.type==='원리금'?'원리금':'이자'}</span><span class="miamt">${won(amt)}</span></div>`).join('')}</div>`:''}
+    </div>`);
+    card.querySelector(".mhead").onclick=()=>{ ui.openMonth=isOpen?null:ym; render(); };
+    main.appendChild(card);
+  });
+  main.appendChild(h(`<div class="tip">ℹ️ <b>SBI저축</b>은 2026년 9월부터 원리금 분할이 시작돼 월 부담이 커집니다. 이자만 내는 만기일시 대출(카카오·광주은행1)은 원금이 줄지 않으니 별도 상환 계획이 필요합니다.</div>`));
+}
+
+function renderPriority(main){
+  const byPrio=[...state.loans].sort((a,b)=>b.rate-a.rate);
+  main.appendChild(h(`<div class="hint">📉 금리 높은 순. 상환 버튼으로 조기상환 효과를 계산합니다.</div>`));
+  byPrio.forEach((l,i)=>{
+    const card=h(`<div class="priocard">
+      <div class="rank ${i<2?'hot':''}">${i+1}</div>
+      <div class="prinfo"><div class="plender">${l.lender}</div><div class="pmeta">잔액 ${won(l.balance)}원 · 월이자 ${won(monthlyInterest(l.balance,l.rate))}</div></div>
+      <div class="prright"><div class="ratebadge ${i<2?'hot':''}">${l.rate.toFixed(2)}%</div><button class="simbtn">상환 ▶</button></div>
+    </div>`);
+    card.querySelector(".simbtn").onclick=()=>{ ui.modal={type:"sim", id:l.id, amount:""}; render(); };
+    main.appendChild(card);
+  });
+}
+
+function renderAll(main){
+  main.appendChild(h(`<div class="hint">👛 전체 대출 ${state.loans.length}건. 상환 완료 시 자동으로 사라집니다.</div>`));
+  state.loans.forEach(l=>{
+    const card=h(`<div class="allcard">
+      <div class="alltop"><div class="plender">${l.lender}</div><button class="del">🗑</button></div>
+      <div class="allgrid">
+        <div><div class="clabel">최초원금</div><div class="cval">${won(l.orig||l.balance)}</div></div>
+        <div><div class="clabel">현재잔액</div><div class="cval">${won(l.balance)}</div></div>
+        <div><div class="clabel">금리</div><div class="cval">${l.rate.toFixed(2)}%</div></div>
+        <div><div class="clabel">월 상환</div><div class="cval">${won(monthlyPayment(l))}</div></div>
+      </div>
+      <div class="alltag">${l.type}${l.months>0?' · '+l.months+'개월':''} · 납입 ${l.payDay}일${l.note?' · '+l.note:''}</div>
+    </div>`);
+    card.querySelector(".del").onclick=()=>{ state.loans=state.loans.filter(x=>x.id!==l.id); save(); render(); };
+    main.appendChild(card);
+  });
+  const add=h(`<button class="addbtn">＋ 대출 추가</button>`);
+  add.onclick=()=>{ ui.modal={type:"addLoan"}; render(); };
+  main.appendChild(add);
+}
+
+// ═══════════════ 모달 ═══════════════
+function renderModal(){
+  const m=ui.modal;
+  const bg=h(`<div class="modalbg"></div>`);
+  bg.onclick=()=>{ if(m.type==="reason"){ ui.focusAsset=null; } ui.modal=null; render(); };
+  const box=h(`<div class="modal"></div>`);
+  box.onclick=e=>e.stopPropagation();
+
+  if(m.type==="reason"){
+    const diff=m.next-m.prev, up=diff>=0;
+    const presets = up?["급여·입금","주식 상승","이자·배당","매도 정산"]:["생활비 지출","주식 하락","대출 상환","카드값"];
+    box.innerHTML=`
+      <div class="mdhead"><span>${m.name} 변동 사유</span><button class="mdclose">✕</button></div>
+      <div class="rflow"><span>${won(m.prev)}</span><span style="color:#adb5bd">▶</span><span style="font-weight:800">${won(m.next)}원</span><span style="margin-left:auto;font-weight:800;color:${up?'var(--good)':'var(--hot)'}">${up?'+':'−'}${won(Math.abs(diff))}</span></div>
+      <label class="lbl">왜 변동됐나요?</label>
+      <div class="presetrow">${presets.map(p=>`<button class="preset" data-p="${p}">${p}</button>`).join('')}</div>
+      <input class="in reasoninput" style="margin-top:10px" placeholder="직접 입력 (예: 삼성전자 매도)" />
+      <button class="apply">기록하기</button>
+      <button class="skip">사유 없이 저장</button>`;
+    box.querySelector(".mdclose").onclick=()=>{ ui.focusAsset=null; ui.modal=null; render(); };
+    let reason="";
+    const rin=box.querySelector(".reasoninput");
+    box.querySelectorAll(".preset").forEach(b=>b.onclick=()=>{ reason=b.dataset.p; rin.value=reason; box.querySelectorAll(".preset").forEach(x=>x.classList.remove("on")); b.classList.add("on"); });
+    rin.oninput=e=>{ reason=e.target.value; };
+    const commit=(r)=>{
+      const d=new Date(); const date=`${d.getMonth()+1}/${d.getDate()}`;
+      state.assets=state.assets.map(x=>x.id===m.id?{...x,amount:m.next}:x);
+      state.history=[{id:Date.now(),date,name:m.name,prev:m.prev,next:m.next,reason:r},...state.history];
+      ui.focusAsset=null; ui.modal=null; save(); render();
+    };
+    box.querySelector(".apply").onclick=()=>commit(reason);
+    box.querySelector(".skip").onclick=()=>commit("");
+  }
+
+  else if(m.type==="sim"){
+    const l=state.loans.find(x=>x.id===m.id);
+    box.innerHTML=`
+      <div class="mdhead"><span>${l.lender} 조기상환</span><button class="mdclose">✕</button></div>
+      <div class="mdsub">현재 잔액 ${won(l.balance)}원 · ${l.rate.toFixed(2)}%</div>
+      <label class="lbl">상환할 금액</label>
+      <input class="in siminput" type="number" inputmode="numeric" placeholder="예: 5000000" />
+      <div class="simarea"></div>
+      <button class="apply">상환 반영하기</button>`;
+    box.querySelector(".mdclose").onclick=()=>{ ui.modal=null; render(); };
+    const si=box.querySelector(".siminput"), area=box.querySelector(".simarea"), applyBtn=box.querySelector(".apply");
+    const update=()=>{
+      const amt=Number(si.value)||0;
+      if(amt>0){
+        const nb=Math.max(0,l.balance-amt), oi=monthlyInterest(l.balance,l.rate), ni=monthlyInterest(nb,l.rate);
+        area.innerHTML=`<div class="simres"><div class="simrow"><span>상환 후 잔액</span><b>${won(nb)}원</b></div><div class="simrow"><span>월 이자</span><b>${won(oi)} → ${won(ni)}</b></div><div class="simrow save"><span>연간 이자 절감</span><b>-${won((oi-ni)*12)}원</b></div></div>`;
+      } else area.innerHTML="";
+    };
+    si.oninput=update;
+    applyBtn.onclick=()=>{
+      const amt=Number(si.value)||0; if(!amt) return;
+      state.loans=state.loans.map(x=>x.id===m.id?{...x,balance:Math.max(0,x.balance-amt)}:x).filter(x=>x.balance>0);
+      ui.modal=null; save(); render();
+    };
+  }
+
+  else if(m.type==="addAsset"){
+    let kind="주식";
+    box.innerHTML=`
+      <div class="mdhead"><span>계좌·자산 추가</span><button class="mdclose">✕</button></div>
+      <label class="lbl">이름</label><input class="in f-name" placeholder="예: 키움 계좌3, 신한 적금" />
+      <label class="lbl">종류</label>
+      <div class="segrow">${["주식","예금","현금","기타"].map(t=>`<button class="seg ${t==='주식'?'on':''}" data-k="${t}">${t}</button>`).join('')}</div>
+      <label class="lbl">금액</label><input class="in f-amt" type="number" inputmode="numeric" placeholder="원" />
+      <button class="apply">추가하기</button>`;
+    box.querySelector(".mdclose").onclick=()=>{ ui.modal=null; render(); };
+    box.querySelectorAll(".seg").forEach(b=>b.onclick=()=>{ kind=b.dataset.k; box.querySelectorAll(".seg").forEach(x=>x.classList.remove("on")); b.classList.add("on"); b.style.background=KIND_COLORS[kind]; b.style.color="#fff"; });
+    box.querySelector(".apply").onclick=()=>{
+      const name=box.querySelector(".f-name").value.trim(); const amt=Number(box.querySelector(".f-amt").value)||0;
+      if(!name) return;
+      state.assets=[...state.assets,{id:Date.now(),name,kind,amount:amt}];
+      ui.modal=null; save(); render();
+    };
+  }
+
+  else if(m.type==="addLoan"){
+    let type="이자만";
+    const draw=()=>{
+      box.innerHTML=`
+        <div class="mdhead"><span>대출 추가</span><button class="mdclose">✕</button></div>
+        <label class="lbl">대출처</label><input class="in f-lender" placeholder="예: 신한은행" value="${box.querySelector('.f-lender')?box.querySelector('.f-lender').value:''}" />
+        <div class="frow">
+          <div style="flex:1"><label class="lbl">현재 잔액</label><input class="in f-bal" type="number" inputmode="numeric" placeholder="원" /></div>
+          <div style="width:110px"><label class="lbl">금리 %</label><input class="in f-rate" type="number" inputmode="decimal" placeholder="0.00" /></div>
+        </div>
+        <label class="lbl">최초 대출원금 <span>(원리금 기준 · 비우면 잔액 사용)</span></label><input class="in f-orig" type="number" inputmode="numeric" placeholder="원" />
+        <label class="lbl">상환방식</label>
+        <div class="segrow">${["이자만","원리금"].map(t=>`<button class="seg ${type===t?'on':''}" data-t="${t}">${t}</button>`).join('')}</div>
+        <div class="frow">
+          ${type==="원리금"?`<div style="flex:1"><label class="lbl">총 개월수</label><input class="in f-months" type="number" inputmode="numeric" placeholder="개월" /></div>`:''}
+          <div style="flex:1"><label class="lbl">매월 납입일</label><input class="in f-day" type="number" inputmode="numeric" placeholder="일" /></div>
+        </div>
+        <button class="apply">추가하기</button>`;
+      box.querySelector(".mdclose").onclick=()=>{ ui.modal=null; render(); };
+      box.querySelectorAll(".seg").forEach(b=>b.onclick=()=>{ type=b.dataset.t; draw(); });
+      box.querySelector(".apply").onclick=()=>{
+        const g=s=>box.querySelector(s)?box.querySelector(s).value:"";
+        const lender=g(".f-lender").trim(), bal=Number(g(".f-bal"))||0, rate=Number(g(".f-rate"))||0, day=Number(g(".f-day"))||0;
+        if(!lender||!bal||!rate||!day) return;
+        state.loans=[...state.loans,{id:Date.now(),lender,balance:bal,orig:Number(g(".f-orig"))||bal,rate,type,months:Number(g(".f-months"))||0,payDay:day,startYM:"2026-01",note:""}];
+        ui.modal=null; save(); render();
+      };
+    };
+    draw();
+  }
+
+  else if(m.type==="lockset"){
+    box.innerHTML=`
+      <div class="mdhead"><span>앱 잠금 설정</span><button class="mdclose">✕</button></div>
+      <div class="mdsub">PIN은 이 기기에만 저장되며, 앱을 열 때마다 물어봅니다.</div>
+      <button class="apply changepin">PIN 변경</button>
+      <button class="skip resetpin" style="color:var(--hot)">PIN 초기화 (다음 실행 때 새로 설정)</button>`;
+    box.querySelector(".mdclose").onclick=()=>{ ui.modal=null; render(); };
+    box.querySelector(".changepin").onclick=()=>{
+      lockState={mode:"set",entry:"",first:"",err:""};
+      localStorage.removeItem(PIN_KEY);
+      ui.modal=null; render(); renderLock();
+    };
+    box.querySelector(".resetpin").onclick=()=>{
+      localStorage.removeItem(PIN_KEY);
+      ui.modal=null; render();
+    };
+  }
+
+  bg.appendChild(box);
+  app.appendChild(bg);
+}
+
+// ═══════════════ 설치 배너 ═══════════════
+let deferredPrompt=null;
+window.addEventListener("beforeinstallprompt",e=>{ e.preventDefault(); deferredPrompt=e; maybeInstallBar(); });
+function maybeInstallBar(){
+  if(document.querySelector(".installbar")) document.querySelector(".installbar").remove();
+  const dismissed = sessionStorage.getItem("installDismiss");
+  if(deferredPrompt && !dismissed){
+    const bar=h(`<div class="installbar"><div><b>홈 화면에 앱 설치</b><p>설치하면 앱처럼 바로 열 수 있어요</p></div><button>설치</button></div>`);
+    bar.querySelector("button").onclick=async()=>{ bar.remove(); deferredPrompt.prompt(); await deferredPrompt.userChoice; deferredPrompt=null; };
+    document.body.appendChild(bar);
+  }
+}
+
+// ═══════════════ 서비스워커 (오프라인) ═══════════════
+if("serviceWorker" in navigator){
+  const swCode = `self.addEventListener("install",e=>self.skipWaiting());self.addEventListener("activate",e=>self.clients.claim());self.addEventListener("fetch",e=>{});`;
+  const blob=new Blob([swCode],{type:"text/javascript"});
+  navigator.serviceWorker.register(URL.createObjectURL(blob)).catch(()=>{});
+}
+
+// ═══════════════ PIN 잠금 ═══════════════
+const PIN_KEY = "assetmgr_pin";
+async function sha(str){
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(str));
+  return [...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,"0")).join("");
+}
+let lockState = { mode:null, entry:"", first:"", err:"" };
+
+function renderLock(){
+  const stored = localStorage.getItem(PIN_KEY);
+  if(lockState.mode===null) lockState.mode = stored ? "enter" : "set";
+  const titles = {
+    set:["PIN 설정", "앱을 보호할 4자리 PIN을 정하세요"],
+    confirm:["PIN 확인", "같은 PIN을 한 번 더 입력하세요"],
+    enter:["잠금 해제", "PIN 4자리를 입력하세요"],
+  };
+  const [title, sub] = titles[lockState.mode];
+  const lock = h(`<div class="lockscreen">
+    <div class="lockicon">🔒</div>
+    <div class="locktitle">${title}</div>
+    <div class="locksub">${sub}</div>
+    <div class="pindots">${[0,1,2,3].map(i=>`<div class="pindot ${i<lockState.entry.length?'filled':''}"></div>`).join('')}</div>
+    <div class="pinerr">${lockState.err}</div>
+    <div class="pinpad"></div>
+  </div>`);
+  const pad = lock.querySelector(".pinpad");
+  ["1","2","3","4","5","6","7","8","9","","0","←"].forEach(k=>{
+    if(k===""){ pad.appendChild(h(`<div class="pinkey blank"></div>`)); return; }
+    const btn = h(`<button class="pinkey ${k==='←'?'fn':''}">${k}</button>`);
+    btn.onclick = ()=>press(k);
+    pad.appendChild(btn);
+  });
+  document.body.appendChild(lock);
+}
+function press(k){
+  if(k==="←"){ lockState.entry=lockState.entry.slice(0,-1); lockState.err=""; refreshDots(); return; }
+  if(lockState.entry.length>=4) return;
+  lockState.entry += k; refreshDots();
+  if(lockState.entry.length===4) setTimeout(handleFull, 120);
+}
+function refreshDots(){
+  const lock=document.querySelector(".lockscreen"); if(!lock) return;
+  lock.querySelectorAll(".pindot").forEach((d,i)=>d.classList.toggle("filled", i<lockState.entry.length));
+  lock.querySelector(".pinerr").textContent = lockState.err;
+}
+async function handleFull(){
+  const pin = lockState.entry;
+  if(lockState.mode==="set"){
+    lockState.first=pin; lockState.entry=""; lockState.mode="confirm"; lockState.err="";
+    document.querySelector(".lockscreen").remove(); renderLock();
+  } else if(lockState.mode==="confirm"){
+    if(pin===lockState.first){ localStorage.setItem(PIN_KEY, await sha(pin)); unlock(); }
+    else { lockState.entry=""; lockState.first=""; lockState.mode="set"; lockState.err="PIN이 일치하지 않아요. 다시 설정하세요"; document.querySelector(".lockscreen").remove(); renderLock(); }
+  } else {
+    if(await sha(pin)===localStorage.getItem(PIN_KEY)) unlock();
+    else { lockState.entry=""; lockState.err="PIN이 틀렸어요"; refreshDots(); if(navigator.vibrate) navigator.vibrate(200); }
+  }
+}
+function unlock(){ const lock=document.querySelector(".lockscreen"); if(lock) lock.remove(); render(); }
+
+renderLock();
+</script>
+</body>
+</html>
