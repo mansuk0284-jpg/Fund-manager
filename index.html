@@ -71,6 +71,13 @@
   .ainput.focus { border-color:var(--accent); background:#fff; }
   .awon { font-size:13px; color:var(--sub); font-weight:600; }
   .del { color:#c0c0c8; padding:4px; display:flex; }
+  .histcard .del, .moveitem .del { margin-left:8px; flex-shrink:0; font-size:13px; }
+  .histcard > div:first-child { flex:1; min-width:0; }
+  .pastebtn { width:100%; padding:12px; margin-bottom:14px; background:#eef1fd; color:var(--accent); border-radius:12px; font-size:13px; font-weight:700; }
+  .pastenote { font-size:12.5px; line-height:1.5; color:var(--sub); margin-top:6px; }
+  .pastenote b { color:var(--ink); }
+  textarea.in { font-family:inherit; font-size:14px; line-height:1.5; resize:vertical; display:block; }
+  .formerr { font-size:12.5px; font-weight:600; color:var(--hot); margin-top:12px; min-height:16px; }
   .prevhint { margin-top:10px; padding-top:10px; border-top:1px dashed var(--line); font-size:12.5px; color:var(--sub); }
   .prevhint b { color:var(--ink); }
 
@@ -323,9 +330,9 @@ const BANK_LINKS = {
   "IBK":"https://mybank.ibk.co.kr/",
   "기업은행":"https://mybank.ibk.co.kr/",
 };
-const KAKAO_STOCK_LINK = "https://kakaopaysec.com/";
 // 안드로이드 앱 패키지명 (플레이스토어에서 확인된 것만 · 앱 설치 시 앱으로 실행)
 const BANK_PACKAGES = {
+  "카카오페이":"com.kakaopay.app",
   "카카오뱅크":"com.kakaobank.channel",
   "카카오":"com.kakaobank.channel",
   "KB국민":"com.kbstar.kbbank",
@@ -334,18 +341,20 @@ const BANK_PACKAGES = {
   "우리":"com.wooribank.smart.npib",
   "우리은행":"com.wooribank.smart.npib",
   "우리금융":"com.wooribank.smart.npib",
-  "부산은행":"com.webcash.wooriabank",
-  "부산":"com.webcash.wooriabank",
+  "부산은행":"kr.co.busanbank.mbp",
+  "부산":"kr.co.busanbank.mbp",
+  "광주":"com.kjbank.asb.pbanking",
   "케이뱅크":"com.kbankwith.smartbank",
-  "SBI":"kr.co.sbibank.smart",
-  "SBI저축":"kr.co.sbibank.smart",
+  "SBI":"com.sbi.saidabank",
   "삼성카드":"kr.co.samsungcard.mpocket",
   "신한":"com.shinhan.sbanking",
   "하나":"com.kebhana.hanapush",
-  "농협":"nh.smart",
-  "NH":"nh.smart",
-  "카카오페이증권":"com.kakaopaysec",
+  "농협":"nh.smart.banking",
+  "NH":"nh.smart.banking",
+  "키움":"com.kiwoom.heromts",
+  "토스":"viva.republica.toss",
 };
+const intentLink = pkg => "intent://launch#Intent;scheme=app;package="+pkg+";S.browser_fallback_url="+encodeURIComponent("https://play.google.com/store/apps/details?id="+pkg)+";end";
 function findBankPackage(name){
   if(!name) return "";
   for(const key in BANK_PACKAGES){ if(name.includes(key)) return BANK_PACKAGES[key]; }
@@ -354,19 +363,8 @@ function findBankPackage(name){
 // 저장된 링크 열기 (intent:// 또는 http)
 function openLink(url){
   if(!url) return;
-  if(url.startsWith("intent://") || url.startsWith("http")){ window.location.href=url; }
+  if(url.startsWith("intent://")){ window.location.href=url; }
   else { window.open(url,"_blank"); }
-}
-// 앱 우선 열기: 안드로이드는 intent로 앱 실행(없으면 웹 fallback), 그 외는 웹
-function openApp(pkg, webUrl){
-  const isAndroid=/Android/i.test(navigator.userAgent);
-  if(isAndroid && pkg){
-    const fallback = encodeURIComponent(webUrl||"https://play.google.com/store/apps/details?id="+pkg);
-    // 앱이 있으면 실행, 없으면 fallback(웹/스토어)로
-    window.location.href = "intent://open#Intent;scheme=app;package="+pkg+";S.browser_fallback_url="+fallback+";end";
-  } else {
-    window.open(webUrl||"https://play.google.com/store/apps/details?id="+pkg, "_blank");
-  }
 }
 // 이름으로 링크 찾기(부분일치)
 function findBankLink(name){
@@ -374,35 +372,73 @@ function findBankLink(name){
   for(const key in BANK_LINKS){ if(name.includes(key)) return BANK_LINKS[key]; }
   return "";
 }
-const MONTHS_2026 = Array.from({length:12},(_,i)=>`2026-${String(i+1).padStart(2,"0")}`);
+// HTML 이스케이프 (이름·메모 등 사용자 입력을 화면에 넣을 때)
+const esc = s => String(s==null?"":s).replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const ymOf = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
+const nowYM = () => ymOf(new Date());
+const isYM = s => /^\d{4}-(0[1-9]|1[0-2])$/.test(s);
 
 // ═══════════════ 저장소 ═══════════════
 const DB = "assetmgr_v1";
-function load() {
-  try {
-    const raw = localStorage.getItem(DB);
-    if (!raw) return { loans:DEFAULT_LOANS, assets:DEFAULT_ASSETS, paid:{}, history:[], moves:[] };
-    const d = JSON.parse(raw);
-    const loans = d.loans||DEFAULT_LOANS;
-    // 기본 대출 중 저장본에 없는 id는 자동 추가(앱 업데이트 시 새 대출 반영)
-    const haveIds = new Set(loans.map(l=>l.id));
-    DEFAULT_LOANS.forEach(dl=>{ if(!haveIds.has(dl.id)) loans.push(dl); });
-    return { loans, assets:d.assets||DEFAULT_ASSETS, paid:d.paid||{}, history:d.history||[], moves:d.moves||[] };
-  } catch(e) { return { loans:DEFAULT_LOANS, assets:DEFAULT_ASSETS, paid:{}, history:[], moves:[] }; }
+const BACKUP_KEY = "assetmgr_lastbackup";
+const freshState = () => ({ loans:DEFAULT_LOANS.map(l=>({...l})), assets:DEFAULT_ASSETS.map(a=>({...a})), paid:{}, paidYM:nowYM(), history:[], moves:[] });
+// 저장본(또는 백업 파일)을 상태로 변환. 저장본의 대출 목록을 그대로 신뢰한다
+// (삭제·완납한 대출을 기본값에서 되살리지 않음)
+// 예전 버전이 저장한, 플레이스토어에 없는 잘못된 패키지명 → 올바른 패키지명
+const PKG_FIXES = { "com.webcash.wooriabank":"kr.co.busanbank.mbp", "kr.co.sbibank.smart":"com.sbi.saidabank", "nh.smart":"nh.smart.banking", "com.kakaopaysec":"com.kakaopay.app" };
+function fixLink(x){
+  const mm = x && typeof x.link==="string" && x.link.match(/;package=([^;]+);/);
+  return (mm && PKG_FIXES[mm[1]]) ? {...x, link:intentLink(PKG_FIXES[mm[1]])} : x;
 }
-function save() {
+function normalize(d){
+  const f=freshState();
+  const isObj = x => x && typeof x==="object";
+  // 계산에 쓰는 값은 형식을 보정 (손상된 저장본·백업 파일로 화면이 깨지지 않게)
+  const fixLoan = l => fixLink({...l, lender:String(l.lender||"이름없음"), balance:Number(l.balance)||0, rate:Number(l.rate)||0, months:Number(l.months)||0, payDay:Number(l.payDay)||1, startYM:isYM(l.startYM)?l.startYM:nowYM()});
+  const fixAsset = a => fixLink({...a, name:String(a.name||"이름없음"), amount:Number(a.amount)||0, kind:KIND_COLORS[a.kind]?a.kind:"기타"});
+  return {
+    loans: Array.isArray(d.loans) ? d.loans.filter(isObj).map(fixLoan) : f.loans,
+    assets: Array.isArray(d.assets) ? d.assets.filter(isObj).map(fixAsset) : f.assets,
+    paid: (d.paid && typeof d.paid==="object") ? d.paid : {},
+    paidYM: d.paidYM || nowYM(),
+    history: Array.isArray(d.history) ? d.history.filter(isObj) : [],
+    moves: Array.isArray(d.moves) ? d.moves.filter(isObj) : [],
+  };
+}
+function load() {
+  const raw = localStorage.getItem(DB);
+  if (!raw) return freshState();
+  try { return normalize(JSON.parse(raw)); }
+  catch(e) {
+    // 손상된 저장본은 덮어쓰기 전에 따로 보관
+    try { localStorage.setItem(DB+"_corrupt", raw); } catch(_){}
+    return freshState();
+  }
+}
+const snapshot = () => ({ loans:state.loans, assets:state.assets, paid:state.paid, paidYM:state.paidYM, history:state.history, moves:state.moves });
+function save(quiet) {
   try {
-    localStorage.setItem(DB, JSON.stringify({ loans:state.loans, assets:state.assets, paid:state.paid, history:state.history, moves:state.moves }));
-    showSaved();
-  } catch(e) {}
+    localStorage.setItem(DB, JSON.stringify(snapshot()));
+    if(!quiet) toast("저장됨");
+  } catch(e) { toast("⚠️ 저장 실패 · 저장공간을 확인하세요", 3000); }
 }
 let saveTimer=null;
-function showSaved(){
+function toast(msg, ms){
   clearTimeout(saveTimer);
   let t=document.querySelector(".savedtoast");
-  if(!t){ t=document.createElement("div"); t.className="savedtoast"; t.textContent="저장됨"; document.body.appendChild(t); }
-  requestAnimationFrame(()=>t.classList.add("show"));
-  saveTimer=setTimeout(()=>t.classList.remove("show"),1200);
+  if(!t){ t=document.createElement("div"); t.className="savedtoast"; document.body.appendChild(t); }
+  t.textContent=msg;
+  // 숨김 타이머는 표시된 뒤에 시작 (순서가 뒤집혀 토스트가 계속 남는 것 방지)
+  requestAnimationFrame(()=>{ t.classList.add("show"); clearTimeout(saveTimer); saveTimer=setTimeout(()=>t.classList.remove("show"),ms||1200); });
+}
+// 달이 바뀌면 '이번 달 납입 체크'를 초기화
+function rollMonth(){
+  const ym=nowYM();
+  if(state.paidYM!==ym){
+    state.paid={}; state.paidYM=ym;
+    state.loans=state.loans.filter(l=>l.balance>0); // 납입 체크로 완납된 대출 정리
+    save(true);
+  }
 }
 
 // ═══════════════ 계산 ═══════════════
@@ -421,6 +457,19 @@ const numVal = el => el ? Number(el.value.replace(/,/g,''))||0 : 0;
 const monthlyInterest = (bal,rate) => bal*(rate/100)/12;
 function amort(p,rate,m){ if(m<=0) return 0; const r=rate/100/12; if(r===0) return p/m; return p*r*Math.pow(1+r,m)/(Math.pow(1+r,m)-1); }
 function fixedMonthly(l){ if(l.type!=="원리금") return monthlyInterest(l.balance,l.rate); return amort(l.orig||l.balance, l.rate, l.months); }
+// 원리금 납입액 중 원금 상환분 (납입 체크 시 잔액에서 차감할 금액)
+function principalPortion(l){
+  if(l.type!=="원리금") return 0;
+  return Math.min(l.balance, Math.max(0, Math.round(fixedMonthly(l)-monthlyInterest(l.balance,l.rate))));
+}
+// 다음 납입일까지 남은 일수 (31일 납입인데 30일까지인 달은 말일로 계산)
+function daysUntilPay(payDay){
+  const n=new Date(), y=n.getFullYear(), m=n.getMonth(), d=n.getDate();
+  const dim=(yy,mm)=>new Date(yy,mm+1,0).getDate();
+  const thisDue=Math.min(payDay, dim(y,m));
+  if(thisDue>=d) return thisDue-d;
+  return (dim(y,m)-d)+Math.min(payDay, dim(y,m+1));
+}
 const monthlyPayment = l => fixedMonthly(l);
 function paymentInMonth(l, ym){
   if(l.firstYM && l.firstYM===ym) return l.firstAmount;
@@ -439,18 +488,55 @@ function maturityInMonth(l, ym){
   return 0;
 }
 
+// ═══════════════ 알림·문자 분석 ═══════════════
+// 같은 기관을 가리키는 표기들 (알림 문구 ↔ 앱에 등록한 계좌 이름 매칭용)
+const BANK_ALIASES = [
+  ["카카오뱅크","카뱅","kakaobank"],["카카오페이"],["KB","국민"],["우리"],["부산","BNK"],["광주"],
+  ["케이뱅크","K뱅크","Kbank"],["키움"],["SBI","사이다"],["삼성카드"],["신한"],["하나"],["농협","NH"],
+  ["IBK","기업"],["토스"],["새마을","MG"],["신협"],["우체국"],["미래에셋"],["삼성증권"],["한국투자","한투"],
+];
+function parseNotice(text){
+  const num = s => Number(String(s).replace(/[^0-9]/g,''))||0;
+  const bal = text.match(/(?:대출\s*잔액|잔액|잔고|평가\s*금액|총\s*평가|예탁\s*자산|총\s*자산|예수금)\s*[:：]?\s*([0-9][0-9,]*)\s*원?/);
+  const tx = text.match(/(입금|출금|이체|결제|승인|매수|매도|상환)\s*[:：]?\s*([0-9][0-9,]*)\s*원?/);
+  const txKind = tx ? tx[1] : "";
+  const reasons = { 입금:"급여·입금", 매도:"매도 정산", 출금:"생활비 지출", 이체:"생활비 지출", 결제:"카드값", 승인:"카드값", 매수:"주식 매수", 상환:"대출 상환" };
+  return { balance: bal?num(bal[1]):null, txKind, txAmount: tx?num(tx[2]):0, txIn: txKind==="입금"||txKind==="매도", isLoan:/대출/.test(text), reason: reasons[txKind]||"" };
+}
+// 알림 문구에 등장하는 기관명으로 계좌(A…)·대출(L…) 추정
+function guessTarget(text, preferLoan){
+  const low=text.toLowerCase();
+  const score = name => {
+    const n=String(name).toLowerCase();
+    let s = low.includes(n) ? 3 : 0;
+    BANK_ALIASES.forEach(g=>{ if(g.some(k=>low.includes(k.toLowerCase())) && g.some(k=>n.includes(k.toLowerCase()))) s+=2; });
+    return s;
+  };
+  const cands=[...state.assets.map(a=>({v:"A"+a.id, s:score(a.name)+(preferLoan?0:1)})), ...state.loans.map(l=>({v:"L"+l.id, s:score(l.lender)+(preferLoan?1:0)}))].filter(c=>c.s>=2);
+  cands.sort((a,b)=>b.s-a.s);
+  return cands.length ? cands[0].v : "";
+}
+
 // ═══════════════ 상태 ═══════════════
 let state = load();
-let ui = { tab:"dash", openMonth:null, focusAsset:null, draft:"", showAllHist:false, modal:null };
-const today = new Date();
-const curDay = today.getDate();
-const curYM = `2026-${String(today.getMonth()+1).padStart(2,"0")}`;
+let ui = { tab:"dash", openMonth:null, focusAsset:null, draft:"", showAllHist:false, showAllMoves:false, modal:null };
+const todayStamp = () => { const d=new Date(); return { date:`${d.getMonth()+1}/${d.getDate()}`, fullDate:`${ymOf(d)}-${String(d.getDate()).padStart(2,"0")}` }; };
+// 자산 금액 변경 + 변동내역(그 시점 순자산 포함) 기록
+function applyAssetChange(id, next, reason){
+  const a=state.assets.find(x=>x.id===id); if(!a) return;
+  const prev=a.amount;
+  state.assets=state.assets.map(x=>x.id===id?{...x,amount:next}:x);
+  const totalA=state.assets.reduce((s,x)=>s+x.amount,0);
+  const totalD=state.loans.reduce((s,l)=>s+l.balance,0);
+  state.history=[{id:Date.now(),...todayStamp(),name:a.name,prev,next,reason,totalAsset:totalA,totalDebt:totalD,net:totalA-totalD},...state.history];
+}
 
 // ═══════════════ 렌더 ═══════════════
 const app = document.getElementById("app");
 function h(html){ const d=document.createElement("div"); d.innerHTML=html.trim(); return d.firstElementChild; }
 
 function render(){
+  rollMonth();
   const totalDebt = state.loans.reduce((s,l)=>s+l.balance,0);
   const totalAsset = state.assets.reduce((s,a)=>s+a.amount,0);
   const net = totalAsset - totalDebt;
@@ -464,7 +550,7 @@ function render(){
   const headBg = net>=0 ? "linear-gradient(160deg,#12352a,#1d5c43)" : "linear-gradient(160deg,#3a1720,#6b2331)";
   app.appendChild(h(`
     <header style="background:${headBg}">
-      <div class="htop"><span class="dot" style="background:${net>=0?'#5be3a5':'#ff8a9b'}"></span><span class="brand">실질 자산 현황</span><button class="lockbtn" style="margin-left:auto;color:rgba(255,255,255,.6);font-size:16px;padding:2px 6px">🔒</button></div>
+      <div class="htop"><span class="dot" style="background:${net>=0?'#5be3a5':'#ff8a9b'}"></span><span class="brand">실질 자산 현황</span><button class="backupbtn" style="margin-left:auto;color:rgba(255,255,255,.6);font-size:16px;padding:2px 6px">💾</button><button class="lockbtn" style="color:rgba(255,255,255,.6);font-size:16px;padding:2px 6px">🔒</button></div>
       <div class="netlabel">순자산 (자산 − 부채)</div>
       <div class="netval">${net>=0?'+':'−'}${won(Math.abs(net))}<small>원</small></div>
       <div class="mrow">
@@ -482,6 +568,7 @@ function render(){
   `));
   const lb = app.querySelector(".lockbtn");
   if(lb) lb.onclick = ()=>{ ui.modal={type:"lockset"}; render(); };
+  app.querySelector(".backupbtn").onclick = ()=>{ ui.modal={type:"backup"}; render(); };
 
   // 탭
   const nav = h(`<nav></nav>`);
@@ -615,14 +702,23 @@ function renderDash(main, totalAsset, totalDebt, net, mInt){
   if(!state.moves||state.moves.length===0){
     ml.appendChild(h(`<div class="dashempty">주식 수익으로 대출을 갚거나, 예금↔대출 등 자금을 옮기면 여기에 기록됩니다.</div>`));
   } else {
-    state.moves.slice(0,6).forEach(mv=>{
-      ml.appendChild(h(`<div class="moveitem">
+    (ui.showAllMoves?state.moves:state.moves.slice(0,6)).forEach(mv=>{
+      const item=h(`<div class="moveitem">
         <div class="moveicon" style="background:${mv.kind==='상환'?'#eefaf1':'#eef1fd'}">${mv.kind==='상환'?'↓':'↔'}</div>
-        <div class="moveinfo"><div class="movefromto">${mv.from} → ${mv.to}</div><div class="movedate">${mv.date}${mv.memo?' · '+mv.memo:''}</div></div>
+        <div class="moveinfo"><div class="movefromto">${esc(mv.from)} → ${esc(mv.to)}</div><div class="movedate">${esc(mv.date)}${mv.memo?' · '+esc(mv.memo):''}</div></div>
         <div class="moveamt">${won(mv.amount)}</div>
-      </div>`));
+        <button class="del">✕</button>
+      </div>`);
+      item.querySelector(".del").onclick=()=>{
+        if(confirm('이 자금 이동 기록을 삭제할까요?\n(기록만 지워지고, 이미 반영된 계좌·대출 잔액은 그대로입니다)')){ state.moves=state.moves.filter(x=>x.id!==mv.id); save(); render(); }
+      };
+      ml.appendChild(item);
     });
-    if(state.moves.length>6) ml.appendChild(h(`<div class="movemore">외 ${state.moves.length-6}건 더</div>`));
+    if(state.moves.length>6){
+      const more=h(`<button class="histmore">${ui.showAllMoves?'접기':'전체 '+state.moves.length+'건 보기'}</button>`);
+      more.onclick=()=>{ ui.showAllMoves=!ui.showAllMoves; render(); };
+      ml.appendChild(more);
+    }
   }
   main.appendChild(moveCard);
 
@@ -631,7 +727,7 @@ function renderDash(main, totalAsset, totalDebt, net, mInt){
     const mc=h(`<div class="dashcard"><div class="dashtitle">만기 예정</div></div>`);
     maturing.forEach(({l,monthsLeft,my,mm})=>{
       mc.appendChild(h(`<div class="matrow ${monthsLeft<=3?'urgent':''}">
-        <div class="matinfo"><div class="matname">${l.lender}</div><div class="matsub">${my}.${mm} · 원금 ${won(l.balance)}원 일시상환</div></div>
+        <div class="matinfo"><div class="matname">${esc(l.lender)}</div><div class="matsub">${my}.${mm} · 원금 ${won(l.balance)}원 일시상환</div></div>
         <div class="matleft ${monthsLeft<=3?'urgent':''}">${monthsLeft}개월 후</div>
       </div>`));
     });
@@ -644,7 +740,7 @@ function renderDash(main, totalAsset, totalDebt, net, mInt){
     const pc=h(`<div class="dashcard"><div class="dashtitle">먼저 갚으면 좋은 대출</div></div>`);
     top3.forEach((l,i)=>{
       pc.appendChild(h(`<div class="matrow">
-        <div class="matinfo"><div class="matname">${i+1}. ${l.lender}</div><div class="matsub">잔액 ${won(l.balance)}원</div></div>
+        <div class="matinfo"><div class="matname">${i+1}. ${esc(l.lender)}</div><div class="matsub">잔액 ${won(l.balance)}원</div></div>
         <div class="matleft" style="color:var(--hot)">${l.rate.toFixed(2)}%</div>
       </div>`));
     });
@@ -673,8 +769,7 @@ function renderTrend(main, totalAsset, totalDebt, net){
   withNet.forEach(hh=>{ const key=hh.fullDate||hh.date; if(!seen[key]){ seen[key]=1; daily.push(hh); } });
   daily.reverse(); // 오래된→최신
   // 현재값을 마지막 점으로 추가
-  const todayD=new Date(); const todayKey=`${todayD.getFullYear()}-${String(todayD.getMonth()+1).padStart(2,"0")}-${String(todayD.getDate()).padStart(2,"0")}`;
-  const points=[...daily.map(hh=>({label:hh.date, net:hh.net})), {label:"오늘", net}];
+  const points=[...daily.map(hh=>({label:esc(hh.date), net:hh.net})), {label:"오늘", net}];
 
   // SVG 라인차트
   const W=428, H=180, pad=8;
@@ -712,7 +807,7 @@ function renderTrend(main, totalAsset, totalDebt, net){
     const delta = prevItem ? hh.net - prevItem.net : null;
     const up = delta!==null && delta>=0;
     main.appendChild(h(`<div class="snapcard">
-      <div class="snapleft"><div class="snapdate">${hh.date}</div><div class="snapreason">${hh.name}${hh.reason?' · '+hh.reason:''}</div></div>
+      <div class="snapleft"><div class="snapdate">${esc(hh.date)}</div><div class="snapreason">${esc(hh.name)}${hh.reason?' · '+esc(hh.reason):''}</div></div>
       <div class="snapright">
         <div class="snapnet" style="color:${hh.net>=0?'var(--good)':'var(--hot)'}">${hh.net>=0?'+':'−'}${won(Math.abs(hh.net))}</div>
         <div class="snapdetail">자산 ${won(hh.totalAsset)} · 부채 ${won(hh.totalDebt)}</div>
@@ -724,6 +819,9 @@ function renderTrend(main, totalAsset, totalDebt, net){
 
 function renderAssets(main, totalAsset){
   main.appendChild(h(`<div class="hint">💰 예금·주식 계좌를 개별 관리하세요. 입력창을 누르면 기존 금액이 아래에 표시됩니다.</div>`));
+  const pasteBtn = h(`<button class="pastebtn">📋 은행 알림·문자 붙여넣어 잔액 자동 반영</button>`);
+  pasteBtn.onclick=()=>{ ui.modal={type:"paste"}; render(); };
+  main.appendChild(pasteBtn);
   ["주식","예금","현금","기타"].forEach(kind=>{
     const list = state.assets.filter(a=>a.kind===kind);
     if(!list.length) return;
@@ -736,7 +834,7 @@ function renderAssets(main, totalAsset){
       const linkBtn = `<button class="linkbtn">${customLink?'📲':'🔗'}</button>`;
       const card = h(`<div class="acard">
         <div class="atop">
-          <div class="aname">${a.name}${linkBtn}</div>
+          <div class="aname">${esc(a.name)}${linkBtn}</div>
           <div class="aright">
             <input class="ainput" type="text" inputmode="numeric" placeholder="0" value="${a.amount===0?'':won(a.amount)}" />
             <span class="awon">원</span>
@@ -775,7 +873,7 @@ function renderAssets(main, totalAsset){
         if(next!==a.amount){ ui.modal={type:"reason", id:a.id, name:a.name, prev:a.amount, next}; render(); }
         else { card.classList.remove("focus"); input.classList.remove("focus"); hint.style.display="none"; }
       };
-      card.querySelector(".del").onclick = ()=>{ state.assets=state.assets.filter(x=>x.id!==a.id); save(); render(); };
+      card.querySelector(".del").onclick = ()=>{ if(confirm(a.name+' 계좌를 삭제할까요?')){ state.assets=state.assets.filter(x=>x.id!==a.id); save(); render(); } };
       g.appendChild(card);
     });
     main.appendChild(g);
@@ -792,10 +890,15 @@ function renderAssets(main, totalAsset){
     const shown = ui.showAllHist ? state.history : state.history.slice(0,5);
     shown.forEach(hh=>{
       const up = hh.next>=hh.prev;
-      main.appendChild(h(`<div class="histcard">
-        <div><div class="hdate">${hh.date}</div><div class="hname">${hh.name}</div><div class="hreason">${hh.reason||'사유 없음'}</div></div>
+      const hc=h(`<div class="histcard">
+        <div><div class="hdate">${esc(hh.date)}</div><div class="hname">${esc(hh.name)}</div><div class="hreason">${esc(hh.reason)||'사유 없음'}</div></div>
         <div class="hright"><div class="hdelta" style="color:${up?'var(--good)':'var(--hot)'}">${up?'+':'−'}${won(Math.abs(hh.next-hh.prev))}</div><div class="hflow">${won(hh.prev)} → ${won(hh.next)}</div></div>
-      </div>`));
+        <button class="del">✕</button>
+      </div>`);
+      hc.querySelector(".del").onclick=()=>{
+        if(confirm('이 변동내역을 삭제할까요?\n(기록만 지워지고 계좌 금액은 그대로입니다. 추이·수익 집계에서도 빠집니다)')){ state.history=state.history.filter(x=>x.id!==hh.id); save(); render(); }
+      };
+      main.appendChild(hc);
     });
     if(state.history.length>5){
       const mb=h(`<button class="histmore">${ui.showAllHist?'접기':'전체 '+state.history.length+'건 보기'}</button>`);
@@ -806,31 +909,41 @@ function renderAssets(main, totalAsset){
 }
 
 function renderHome(main){
-  const sched = [...state.loans].filter(l=>!state.paid[l.id] && monthlyPayment(l)>0).map(l=>{
-    const diff = l.payDay>=curDay ? l.payDay-curDay : l.payDay+31-curDay;
-    return {...l, diff};
-  }).sort((a,b)=>a.diff-b.diff);
-  main.appendChild(h(`<div class="hint">📅 납입일이 가까운 순서. 체크하면 완료 처리됩니다.</div>`));
+  const sched = [...state.loans].filter(l=>!state.paid[l.id] && monthlyPayment(l)>0).map(l=>({...l, diff:daysUntilPay(l.payDay)})).sort((a,b)=>a.diff-b.diff);
+  main.appendChild(h(`<div class="hint">📅 납입일이 가까운 순서. 체크하면 완료 처리되고, 원리금 대출은 원금 상환분을 잔액에서 차감할 수 있습니다. 체크는 매월 1일 초기화됩니다.</div>`));
   if(!sched.length) main.appendChild(h(`<div class="donecard">✓ 이번 달 납입을 모두 체크했습니다.</div>`));
   sched.forEach(l=>{
     const card=h(`<div class="paycard ${l.diff<=2?'urgent':''}">
       <button class="chk"><span class="chkempty"></span></button>
-      <div class="pinfo"><div class="plender">${l.lender}</div><div class="pmeta">매월 ${l.payDay}일 · ${l.type} · ${l.rate===0?'무이자':l.rate.toFixed(2)+'%'}</div></div>
+      <div class="pinfo"><div class="plender">${esc(l.lender)}</div><div class="pmeta">매월 ${l.payDay}일 · ${l.type} · ${l.rate===0?'무이자':l.rate.toFixed(2)+'%'}</div></div>
       <div class="pright"><div class="pamt">${won(monthlyPayment(l))}</div><div class="pdday ${l.diff<=2?'urgent':''}">${l.diff===0?'오늘':'D-'+l.diff}</div></div>
     </div>`);
-    card.querySelector(".chk").onclick=()=>{ state.paid[l.id]=true; save(); render(); };
+    card.querySelector(".chk").onclick=()=>{
+      // 원리금 대출은 납입액 중 원금 상환분만큼 잔액을 줄일지 물어본다
+      const principal=principalPortion(l);
+      let deducted=0;
+      if(principal>0 && confirm(`${l.lender} 납입 완료 처리합니다.\n\n원금 상환분 ${won(principal)}원을 대출 잔액에서 차감할까요?\n${won(l.balance)}원 → ${won(l.balance-principal)}원\n\n[확인] 잔액 차감  /  [취소] 체크만 (잔액 그대로)`)) deducted=principal;
+      if(deducted>0) state.loans=state.loans.map(x=>x.id===l.id?{...x,balance:x.balance-deducted}:x);
+      state.paid[l.id]={principal:deducted};
+      save(); render();
+    };
     main.appendChild(card);
   });
   const done = state.loans.filter(l=>state.paid[l.id]);
   if(done.length){
     main.appendChild(h(`<div class="paidhead">납입 완료</div>`));
     done.forEach(l=>{
+      const deducted=(state.paid[l.id]&&state.paid[l.id].principal)||0;
       const card=h(`<div class="paycard done">
         <button class="chk"><span class="chkdone">✓</span></button>
-        <div class="pinfo"><div class="plender struck">${l.lender}</div><div class="pmeta">완료</div></div>
+        <div class="pinfo"><div class="plender struck">${esc(l.lender)}</div><div class="pmeta">완료${deducted>0?' · 원금 '+won(deducted)+'원 차감됨':''}</div></div>
         <div class="pamt mut">${won(monthlyPayment(l))}</div>
       </div>`);
-      card.querySelector(".chk").onclick=()=>{ delete state.paid[l.id]; save(); render(); };
+      card.querySelector(".chk").onclick=()=>{
+        // 체크 해제 시 차감했던 원금을 되돌린다
+        if(deducted>0) state.loans=state.loans.map(x=>x.id===l.id?{...x,balance:x.balance+deducted}:x);
+        delete state.paid[l.id]; save(); render();
+      };
       main.appendChild(card);
     });
   }
@@ -864,7 +977,7 @@ function renderYear(main){
     if(items.length===0) return; // 상환 없는 달은 생략
     const card=h(`<div class="monthcard ${isCur?'cur':''}">
       <button class="mhead"><div class="mleft"><span class="mnum ${isCur?'cur':''}">${yy}년 ${mm}월</span>${isCur?'<span class="curbadge">이번 달</span>':''}${hasMaturity?'<span class="matmini">만기</span>':''}</div><div class="mright"><span class="mtotal">${won(total)}원</span><span class="chev ${isOpen?'open':''}">▶</span></div></button>
-      ${isOpen?`<div class="mbody">${items.map(({loan,amt,isMaturity})=>`<div class="mitem"><span class="miday">${loan.payDay}일</span><span class="miname">${loan.lender}</span><span class="mitype ${isMaturity?'mat':''}">${isMaturity?'원금만기':(loan.type==='원리금'?'원리금':'이자')}</span><span class="miamt">${won(amt)}</span></div>`).join('')}</div>`:''}
+      ${isOpen?`<div class="mbody">${items.map(({loan,amt,isMaturity})=>`<div class="mitem"><span class="miday">${loan.payDay}일</span><span class="miname">${esc(loan.lender)}</span><span class="mitype ${isMaturity?'mat':''}">${isMaturity?'원금만기':(loan.type==='원리금'?'원리금':'이자')}</span><span class="miamt">${won(amt)}</span></div>`).join('')}</div>`:''}
     </div>`);
     card.querySelector(".mhead").onclick=()=>{ ui.openMonth=isOpen?null:ym; render(); };
     main.appendChild(card);
@@ -878,7 +991,7 @@ function renderPriority(main){
     const feeTag = (l.prepayFeeRate>0) ? `<span class="feetag">수수료 ${l.prepayFeeRate}%</span>` : '';
     const card=h(`<div class="priocard">
       <div class="rank ${i<2?'hot':''}">${i+1}</div>
-      <div class="prinfo"><div class="plender">${l.lender}${feeTag}</div><div class="pmeta">잔액 ${won(l.balance)}원 · 월이자 ${won(monthlyInterest(l.balance,l.rate))}</div></div>
+      <div class="prinfo"><div class="plender">${esc(l.lender)}${feeTag}</div><div class="pmeta">잔액 ${won(l.balance)}원 · 월이자 ${won(monthlyInterest(l.balance,l.rate))}</div></div>
       <div class="prright"><div class="ratebadge ${i<2?'hot':''}">${l.rate===0?'무이자':l.rate.toFixed(2)+'%'}</div><button class="simbtn">상환 ▶</button></div>
     </div>`);
     card.querySelector(".simbtn").onclick=()=>{ ui.modal={type:"sim", id:l.id, amount:""}; render(); };
@@ -895,17 +1008,17 @@ function renderPriority(main){
   // 1. 무수수료 고금리 대출 = 최우선
   const noFeeHigh=loans.filter(l=>l.rate>=10 && (!l.prepayFeeRate||l.prepayFeeRate===0)).sort((a,b)=>b.rate-a.rate);
   if(noFeeHigh.length){
-    tips.push(`<b>${noFeeHigh[0].lender}(${noFeeHigh[0].rate.toFixed(1)}%)</b>은 금리가 높고 중도상환수수료가 없어 <b>여윳돈이 생기면 1순위로 갚는 게</b> 가장 이득입니다.`);
+    tips.push(`<b>${esc(noFeeHigh[0].lender)}(${noFeeHigh[0].rate.toFixed(1)}%)</b>은 금리가 높고 중도상환수수료가 없어 <b>여윳돈이 생기면 1순위로 갚는 게</b> 가장 이득입니다.`);
   }
   // 2. 수수료 있는 대출 주의
   const withFee=loans.filter(l=>l.prepayFeeRate>0);
   if(withFee.length){
-    tips.push(`${withFee.map(l=>l.lender).join(', ')}은 중도상환수수료가 있어, 갚기 전에 <b>상환 시뮬레이션의 '실질 이득'</b>을 꼭 확인하세요. 만기가 가까우면 유지가 나을 수 있습니다.`);
+    tips.push(`${withFee.map(l=>esc(l.lender)).join(', ')}은 중도상환수수료가 있어, 갚기 전에 <b>상환 시뮬레이션의 '실질 이득'</b>을 꼭 확인하세요. 만기가 가까우면 유지가 나을 수 있습니다.`);
   }
   // 3. 무이자 대출은 후순위
   const noInt=loans.filter(l=>l.rate===0);
   if(noInt.length){
-    tips.push(`${noInt.map(l=>l.lender).join(', ')}은 무이자라 <b>서두를 필요가 없습니다.</b> 이자 나가는 대출부터 정리하세요.`);
+    tips.push(`${noInt.map(l=>esc(l.lender)).join(', ')}은 무이자라 <b>서두를 필요가 없습니다.</b> 이자 나가는 대출부터 정리하세요.`);
   }
   // 4. 예금 vs 대출 금리차
   if(totalAsset>0){
@@ -937,14 +1050,14 @@ function renderAll(main){
     const loanCustom = (l.link && l.link.trim()) ? l.link.trim() : "";
     const loanLinkBtn = `<button class="linkbtn">${loanCustom?'📲':'🔗'}</button>`;
     const card=h(`<div class="allcard">
-      <div class="alltop"><div class="plender">${l.lender}${loanLinkBtn}${matBadge}</div><div style="display:flex;gap:4px"><button class="edit">✏️</button><button class="del">🗑</button></div></div>
+      <div class="alltop"><div class="plender">${esc(l.lender)}${loanLinkBtn}${matBadge}</div><div style="display:flex;gap:4px"><button class="edit">✏️</button><button class="del">🗑</button></div></div>
       <div class="allgrid">
         <div><div class="clabel">최초원금</div><div class="cval">${won(l.orig||l.balance)}</div></div>
         <div><div class="clabel">현재잔액</div><div class="cval">${won(l.balance)}</div></div>
         <div><div class="clabel">금리</div><div class="cval">${rateDisp}</div></div>
         <div><div class="clabel">월 상환</div><div class="cval">${won(monthlyPayment(l))}</div></div>
       </div>
-      <div class="alltag">${l.type}${l.months>0?' · '+l.months+'개월':''} · 납입 ${l.payDay}일${feeTag}${l.note?' · '+l.note:''}</div>
+      <div class="alltag">${l.type}${l.months>0?' · '+l.months+'개월':''} · 납입 ${l.payDay}일${feeTag}${l.note?' · '+esc(l.note):''}</div>
     </div>`);
     const llb=card.querySelector(".linkbtn");
     if(llb) llb.onclick=(e)=>{
@@ -953,7 +1066,7 @@ function renderAll(main){
       else { ui.modal={type:"applink", target:"loan", id:l.id, name:l.lender}; render(); }
     };
     card.querySelector(".edit").onclick=()=>{ ui.modal={type:"editLoan", id:l.id}; render(); };
-    card.querySelector(".del").onclick=()=>{ if(confirm(l.lender+' 대출을 삭제할까요?')){ state.loans=state.loans.filter(x=>x.id!==l.id); save(); render(); } };
+    card.querySelector(".del").onclick=()=>{ if(confirm(l.lender+' 대출을 삭제할까요?')){ state.loans=state.loans.filter(x=>x.id!==l.id); delete state.paid[l.id]; save(); render(); } };
     main.appendChild(card);
   });
   const add=h(`<button class="addbtn">＋ 대출 추가</button>`);
@@ -973,7 +1086,7 @@ function renderModal(){
     const diff=m.next-m.prev, up=diff>=0;
     const presets = up?["급여·입금","주식 상승","이자·배당","매도 정산"]:["생활비 지출","주식 하락","대출 상환","카드값"];
     box.innerHTML=`
-      <div class="mdhead"><span>${m.name} 변동 사유</span><button class="mdclose">✕</button></div>
+      <div class="mdhead"><span>${esc(m.name)} 변동 사유</span><button class="mdclose">✕</button></div>
       <div class="rflow"><span>${won(m.prev)}</span><span style="color:#adb5bd">▶</span><span style="font-weight:800">${won(m.next)}원</span><span style="margin-left:auto;font-weight:800;color:${up?'var(--good)':'var(--hot)'}">${up?'+':'−'}${won(Math.abs(diff))}</span></div>
       <label class="lbl">왜 변동됐나요?</label>
       <div class="presetrow">${presets.map(p=>`<button class="preset" data-p="${p}">${p}</button>`).join('')}</div>
@@ -986,13 +1099,7 @@ function renderModal(){
     box.querySelectorAll(".preset").forEach(b=>b.onclick=()=>{ reason=b.dataset.p; rin.value=reason; box.querySelectorAll(".preset").forEach(x=>x.classList.remove("on")); b.classList.add("on"); });
     rin.oninput=e=>{ reason=e.target.value; };
     const commit=(r)=>{
-      const d=new Date(); const date=`${d.getMonth()+1}/${d.getDate()}`;
-      const fullDate=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
-      const newAssets=state.assets.map(x=>x.id===m.id?{...x,amount:m.next}:x);
-      const totalA=newAssets.reduce((s,a)=>s+a.amount,0);
-      const totalD=state.loans.reduce((s,l)=>s+l.balance,0);
-      state.assets=newAssets;
-      state.history=[{id:Date.now(),date,fullDate,name:m.name,prev:m.prev,next:m.next,reason:r,totalAsset:totalA,totalDebt:totalD,net:totalA-totalD},...state.history];
+      applyAssetChange(m.id, m.next, r);
       ui.focusAsset=null; ui.modal=null; save(); render();
     };
     box.querySelector(".apply").onclick=()=>commit(reason);
@@ -1004,7 +1111,7 @@ function renderModal(){
     const feeRate=l.prepayFeeRate||0;
     const feeInfo = feeRate>0 ? `<div class="mdsub">중도상환수수료 ${feeRate}%${l.prepayType==='슬라이딩'?' (잔여기간 비례)':''}</div>` : '';
     box.innerHTML=`
-      <div class="mdhead"><span>${l.lender} 조기상환</span><button class="mdclose">✕</button></div>
+      <div class="mdhead"><span>${esc(l.lender)} 조기상환</span><button class="mdclose">✕</button></div>
       <div class="mdsub">현재 잔액 ${won(l.balance)}원 · ${l.rate===0?'무이자':l.rate.toFixed(2)+'%'}</div>
       ${feeInfo}
       <label class="lbl">상환할 금액</label>
@@ -1042,8 +1149,6 @@ function renderModal(){
           rows+=`<div class="simrow" style="color:var(--hot)"><span>중도상환수수료</span><b>-${won(fee)}원</b></div>`;
           rows+=`<div class="simrow save" style="color:${netFirst>=0?'var(--good)':'var(--hot)'}"><span>1년차 실질 이득</span><b>${netFirst>=0?'+':'−'}${won(Math.abs(netFirst))}원</b></div>`;
           rows+=`<div class="simnote">${breakeven<=12?`약 ${Math.ceil(breakeven)}개월이면 수수료를 이자절감으로 회수합니다.`:`수수료 회수에 ${Math.ceil(breakeven)}개월 걸립니다. 만기가 가까우면 상환보다 유지가 유리할 수 있습니다.`}</div>`;
-        } else {
-          rows+=`<div class="simrow save"><span>연간 이자 절감</span><b>-${won(yearSave)}원</b></div>`;
         }
         area.innerHTML=`<div class="simres">${rows}</div>`;
       } else area.innerHTML="";
@@ -1064,7 +1169,7 @@ function renderModal(){
       <label class="lbl">종류</label>
       <div class="segrow">${["주식","예금","현금","기타"].map(t=>`<button class="seg ${t==='주식'?'on':''}" data-k="${t}">${t}</button>`).join('')}</div>
       <label class="lbl">금액</label><input class="in f-amt" type="text" inputmode="numeric" placeholder="원" />
-      <label class="lbl">접속 링크 <span>(선택 · 비우면 자동 연결)</span></label><input class="in f-link" placeholder="https://... 또는 앱 링크" />
+      <label class="lbl">접속 링크 <span>(선택 · 나중에 🔗 버튼으로도 설정 가능)</span></label><input class="in f-link" placeholder="https://... 또는 앱 링크" />
       <button class="apply">추가하기</button>`;
     box.querySelector(".mdclose").onclick=()=>{ ui.modal=null; render(); };
     attachComma(box.querySelector(".f-amt"));
@@ -1086,12 +1191,13 @@ function renderModal(){
     let keep = orig ? {
       lender:orig.lender, bal:won(orig.balance), rate:String(orig.rate), orig:won(orig.orig||orig.balance),
       months:orig.months?String(orig.months):"", day:String(orig.payDay),
-      fee:orig.prepayFeeRate?String(orig.prepayFeeRate):"", maturity:orig.maturityYM||"", link:orig.link||""
-    } : {lender:"",bal:"",rate:"",orig:"",months:"",day:"",fee:"",maturity:"",link:""};
+      fee:orig.prepayFeeRate?String(orig.prepayFeeRate):"", maturity:orig.maturityYM||"", link:orig.link||"", start:orig.startYM||""
+    } : {lender:"",bal:"",rate:"",orig:"",months:"",day:"",fee:"",maturity:"",link:"",start:nowYM()};
+    let formErr="";
     const draw=()=>{
       box.innerHTML=`
         <div class="mdhead"><span>${editing?'대출 수정':'대출 추가'}</span><button class="mdclose">✕</button></div>
-        <label class="lbl">대출처</label><input class="in f-lender" placeholder="예: 신한은행" value="${keep.lender}" />
+        <label class="lbl">대출처</label><input class="in f-lender" placeholder="예: 신한은행" value="${esc(keep.lender)}" />
         <div class="frow">
           <div style="flex:1"><label class="lbl">현재 잔액</label><input class="in f-bal" type="text" inputmode="numeric" placeholder="원" value="${keep.bal}" /></div>
           <div style="width:110px"><label class="lbl">금리 %</label><input class="in f-rate" type="number" inputmode="decimal" placeholder="0.00" value="${keep.rate}" /></div>
@@ -1100,9 +1206,10 @@ function renderModal(){
         <label class="lbl">상환방식</label>
         <div class="segrow">${["이자만","원리금"].map(t=>`<button class="seg ${type===t?'on':''}" data-t="${t}">${t}</button>`).join('')}</div>
         <div class="frow">
-          ${type==="원리금"?`<div style="flex:1"><label class="lbl">총 개월수</label><input class="in f-months" type="number" inputmode="numeric" placeholder="개월" value="${keep.months}" /></div>`:''}
-          <div style="flex:1"><label class="lbl">매월 납입일</label><input class="in f-day" type="number" inputmode="numeric" placeholder="일" value="${keep.day}" /></div>
+          ${type==="원리금"?`<div style="flex:1"><label class="lbl">총 개월수</label><input class="in f-months" type="number" inputmode="numeric" placeholder="개월" value="${esc(keep.months)}" /></div>`:''}
+          <div style="flex:1"><label class="lbl">매월 납입일</label><input class="in f-day" type="number" inputmode="numeric" placeholder="일" value="${esc(keep.day)}" /></div>
         </div>
+        ${type==="원리금"?`<label class="lbl">상환 시작월 <span>(YYYY-MM · 일정 탭 계산 기준)</span></label><input class="in f-start" placeholder="${nowYM()}" value="${esc(keep.start)}" />`:''}
         <div class="feedivider">중도상환 수수료 <span>(없으면 비워두세요)</span></div>
         <div class="frow">
           <div style="width:120px"><label class="lbl">수수료율 %</label><input class="in f-fee" type="number" inputmode="decimal" placeholder="0.00" value="${keep.fee}" /></div>
@@ -1110,29 +1217,38 @@ function renderModal(){
             <div class="segrow">${["정률","슬라이딩"].map(t=>`<button class="segfee ${feeType===t?'on':''}" data-f="${t}">${t}</button>`).join('')}</div>
           </div>
         </div>
-        <label class="lbl">만기 <span>(YYYY-MM, 예: 2027-07 · 선택)</span></label><input class="in f-maturity" placeholder="2027-07" value="${keep.maturity}" />
-        <label class="lbl">접속 링크 <span>(선택 · 비우면 자동 연결)</span></label><input class="in f-link" placeholder="https://... 또는 앱 링크" value="${keep.link}" />
+        <label class="lbl">만기 <span>(YYYY-MM, 예: 2027-07 · 선택)</span></label><input class="in f-maturity" placeholder="2027-07" value="${esc(keep.maturity)}" />
+        <label class="lbl">접속 링크 <span>(선택 · 나중에 🔗 버튼으로도 설정 가능)</span></label><input class="in f-link" placeholder="https://... 또는 앱 링크" value="${esc(keep.link)}" />
+        <div class="formerr">${formErr}</div>
         <button class="apply">${editing?'저장하기':'추가하기'}</button>`;
       box.querySelector(".mdclose").onclick=()=>{ ui.modal=null; render(); };
       attachComma(box.querySelector(".f-bal"));
       attachComma(box.querySelector(".f-orig"));
-      const sync=()=>{ const g=s=>box.querySelector(s)?box.querySelector(s).value:""; keep={lender:g(".f-lender"),bal:g(".f-bal"),rate:g(".f-rate"),orig:g(".f-orig"),months:g(".f-months"),day:g(".f-day"),fee:g(".f-fee"),maturity:g(".f-maturity"),link:g(".f-link")}; };
+      // 방식 전환으로 숨겨진 칸(개월수·시작월)은 직전 값을 유지
+      const sync=()=>{ const g=(s,prev)=>box.querySelector(s)?box.querySelector(s).value:prev; keep={lender:g(".f-lender",""),bal:g(".f-bal",""),rate:g(".f-rate",""),orig:g(".f-orig",""),months:g(".f-months",keep.months),day:g(".f-day",""),fee:g(".f-fee",""),maturity:g(".f-maturity",""),link:g(".f-link",""),start:g(".f-start",keep.start)}; };
+      const fail=msg=>{ formErr=msg; box.querySelector(".formerr").textContent=msg; };
       box.querySelectorAll(".in").forEach(inp=>inp.addEventListener("input",sync));
       box.querySelectorAll(".seg").forEach(b=>b.onclick=()=>{ sync(); type=b.dataset.t; draw(); });
       box.querySelectorAll(".segfee").forEach(b=>b.onclick=()=>{ sync(); feeType=b.dataset.f; draw(); });
       box.querySelector(".apply").onclick=()=>{
         const lender=box.querySelector(".f-lender").value.trim(), bal=numVal(box.querySelector(".f-bal")), rate=Number(box.querySelector(".f-rate").value)||0, day=Number(box.querySelector(".f-day").value)||0;
-        if(!lender||!bal||!day) return;
+        if(!lender) return fail("대출처를 입력하세요");
+        if(!bal) return fail("현재 잔액을 입력하세요");
+        if(!(day>=1&&day<=31)) return fail("매월 납입일을 1~31 사이로 입력하세요");
         const fee=Number(box.querySelector(".f-fee").value)||0;
-        const maturityRaw=box.querySelector(".f-maturity").value.trim();
-        const maturityYM = /^\d{4}-\d{2}$/.test(maturityRaw) ? maturityRaw : "";
+        const maturityYM=box.querySelector(".f-maturity").value.trim();
+        if(maturityYM && !isYM(maturityYM)) return fail("만기는 2027-07 형식으로 입력하세요 (없으면 비워두세요)");
         const link=box.querySelector(".f-link").value.trim();
         const months=Number(box.querySelector(".f-months")?box.querySelector(".f-months").value:0)||0;
+        if(type==="원리금" && months<=0) return fail("원리금 상환은 총 개월수를 입력하세요");
+        const startRaw=box.querySelector(".f-start")?box.querySelector(".f-start").value.trim():"";
+        if(startRaw && !isYM(startRaw)) return fail("상환 시작월은 2026-09 형식으로 입력하세요");
+        const startYM=startRaw||(orig&&orig.startYM)||nowYM();
         const origP=numVal(box.querySelector(".f-orig"))||bal;
         if(editing){
-          state.loans=state.loans.map(x=>x.id===m.id?{...x, lender, balance:bal, orig:origP, rate, type, months, payDay:day, prepayFeeRate:fee, prepayType:feeType, maturityYM:maturityYM||x.maturityYM, link}:x);
+          state.loans=state.loans.map(x=>x.id===m.id?{...x, lender, balance:bal, orig:origP, rate, type, months, payDay:day, startYM, prepayFeeRate:fee, prepayType:feeType, maturityYM, link}:x);
         } else {
-          state.loans=[...state.loans,{id:Date.now(),lender,balance:bal,orig:origP,rate,type,months,payDay:day,startYM:"2026-01",prepayFeeRate:fee,prepayType:feeType,maturityYM,link,note:""}];
+          state.loans=[...state.loans,{id:Date.now(),lender,balance:bal,orig:origP,rate,type,months,payDay:day,startYM,prepayFeeRate:fee,prepayType:feeType,maturityYM,link,note:""}];
         }
         ui.modal=null; save(); render();
       };
@@ -1147,11 +1263,11 @@ function renderModal(){
     const stockAssets=state.assets;
     const draw=()=>{
       const fromOpts = (kind==="상환")
-        ? [...stockAssets.map(a=>`<option value="A${a.id}">${a.name} (${won(a.amount)})</option>`), `<option value="EXT">외부 수입/기타</option>`].join("")
-        : stockAssets.map(a=>`<option value="A${a.id}">${a.name} (${won(a.amount)})</option>`).join("");
+        ? [...stockAssets.map(a=>`<option value="A${a.id}">${esc(a.name)} (${won(a.amount)})</option>`), `<option value="EXT">외부 수입/기타</option>`].join("")
+        : stockAssets.map(a=>`<option value="A${a.id}">${esc(a.name)} (${won(a.amount)})</option>`).join("");
       const toOpts = (kind==="상환")
-        ? state.loans.map(l=>`<option value="L${l.id}">${l.lender} (잔액 ${won(l.balance)})</option>`).join("")
-        : stockAssets.map(a=>`<option value="A${a.id}">${a.name} (${won(a.amount)})</option>`).join("");
+        ? state.loans.map(l=>`<option value="L${l.id}">${esc(l.lender)} (잔액 ${won(l.balance)})</option>`).join("")
+        : stockAssets.map(a=>`<option value="A${a.id}">${esc(a.name)} (${won(a.amount)})</option>`).join("");
       box.innerHTML=`
         <div class="mdhead"><span>자금 이동 기록</span><button class="mdclose">✕</button></div>
         <div class="segrow" style="margin-bottom:4px">
@@ -1176,8 +1292,8 @@ function renderModal(){
         const toV=box.querySelector(".f-to").value;
         const memo=box.querySelector(".f-memo").value.trim();
         if(!amt||!fromV||!toV) return;
-        const d=new Date(); const date=`${d.getMonth()+1}/${d.getDate()}`;
-        const fullDate=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+        if(fromV===toV){ toast("보내는 곳과 받는 곳이 같아요", 2000); return; }
+        const {date,fullDate}=todayStamp();
         let fromName="", toName="";
         // 출처 차감
         if(fromV==="EXT"){ fromName="외부 수입"; }
@@ -1198,38 +1314,45 @@ function renderModal(){
     // 자주 쓰는 앱 프리셋(안드로이드 intent). 앱 없으면 스토어로.
     const presets=[
       ["카카오뱅크","com.kakaobank.channel"],
-      ["카카오페이증권","com.kakaopaysec"],
+      ["카카오페이(증권)","com.kakaopay.app"],
+      ["키움 영웅문S#","com.kiwoom.heromts"],
       ["KB스타뱅킹","com.kbstar.kbbank"],
       ["우리WON뱅킹","com.wooribank.smart.npib"],
-      ["부산은행","com.webcash.wooriabank"],
+      ["부산은행","kr.co.busanbank.mbp"],
+      ["광주 와뱅크","com.kjbank.asb.pbanking"],
       ["케이뱅크","com.kbankwith.smartbank"],
-      ["SBI저축은행","kr.co.sbibank.smart"],
+      ["SBI 사이다뱅크","com.sbi.saidabank"],
       ["삼성카드","kr.co.samsungcard.mpocket"],
       ["신한SOL","com.shinhan.sbanking"],
       ["하나원큐","com.kebhana.hanapush"],
-      ["NH스마트뱅킹","nh.smart"],
+      ["NH스마트뱅킹","nh.smart.banking"],
+      ["토스","viva.republica.toss"],
     ];
-    const presetHtml = presets.map(([nm,pkg])=>`<button class="applink-preset" data-pkg="${pkg}">${nm}</button>`).join('');
+    // 계좌·대출 이름으로 추천 앱을 찾아 표시
+    const guessPkg = findBankPackage(m.name);
+    const guessWeb = findBankLink(m.name);
+    const presetHtml = presets.map(([nm,pkg])=>`<button class="applink-preset ${curLink.includes("package="+pkg+";")?'on':''}" data-pkg="${pkg}">${nm}${!curLink&&pkg===guessPkg?' · 추천':''}</button>`).join('');
     box.innerHTML=`
-      <div class="mdhead"><span>${m.name} 연결 앱</span><button class="mdclose">✕</button></div>
+      <div class="mdhead"><span>${esc(m.name)} 연결 앱</span><button class="mdclose">✕</button></div>
       <div class="mdsub">아래에서 앱을 고르거나, 링크를 직접 붙여넣으세요. 설정하면 🔗이 📲로 바뀌고 누르면 앱이 열립니다.</div>
       <label class="lbl">자주 쓰는 앱</label>
       <div class="applink-presets">${presetHtml}</div>
       <label class="lbl">직접 입력 <span>(앱 공유링크 또는 웹주소)</span></label>
-      <input class="in f-applink" placeholder="https://... 또는 intent://..." value="${curLink}" />
+      <input class="in f-applink" placeholder="https://... 또는 intent://..." value="${esc(curLink)}" />
+      ${guessWeb?`<button class="skip useweb" style="color:var(--accent)">앱 대신 웹사이트로 연결 (${esc(guessWeb)})</button>`:''}
       <button class="apply savelink">저장</button>
       ${curLink?`<button class="skip clearlink" style="color:var(--hot)">연결 해제</button>`:''}
       <div class="applink-help">💡 앱을 여는 정확한 링크는, 해당 은행 앱에서 특정 화면의 <b>공유하기</b>를 눌러 복사한 뒤 위에 붙여넣으면 가장 정확합니다.</div>`;
     box.querySelector(".mdclose").onclick=()=>{ ui.modal=null; render(); };
     const linkInput=box.querySelector(".f-applink");
     box.querySelectorAll(".applink-preset").forEach(b=>b.onclick=()=>{
-      const pkg=b.dataset.pkg;
       // 안드로이드 intent 링크 생성 (앱 없으면 스토어)
-      const fallback=encodeURIComponent("https://play.google.com/store/apps/details?id="+pkg);
-      linkInput.value="intent://launch#Intent;scheme=app;package="+pkg+";S.browser_fallback_url="+fallback+";end";
+      linkInput.value=intentLink(b.dataset.pkg);
       box.querySelectorAll(".applink-preset").forEach(x=>x.classList.remove("on"));
       b.classList.add("on");
     });
+    const uw=box.querySelector(".useweb");
+    if(uw) uw.onclick=()=>{ linkInput.value=guessWeb; box.querySelectorAll(".applink-preset").forEach(x=>x.classList.remove("on")); };
     const saveLink=(val)=>{
       if(m.target==="asset") state.assets=state.assets.map(x=>x.id===m.id?{...x,link:val}:x);
       else state.loans=state.loans.map(x=>x.id===m.id?{...x,link:val}:x);
@@ -1238,6 +1361,107 @@ function renderModal(){
     box.querySelector(".savelink").onclick=()=>saveLink(linkInput.value.trim());
     const clr=box.querySelector(".clearlink");
     if(clr) clr.onclick=()=>saveLink("");
+  }
+
+  else if(m.type==="paste"){
+    const targetOpts = `<optgroup label="자산">${state.assets.map(a=>`<option value="A${a.id}">${esc(a.name)} (${won(a.amount)})</option>`).join('')}</optgroup><optgroup label="대출">${state.loans.map(l=>`<option value="L${l.id}">${esc(l.lender)} (잔액 ${won(l.balance)})</option>`).join('')}</optgroup>`;
+    box.innerHTML=`
+      <div class="mdhead"><span>알림·문자로 잔액 반영</span><button class="mdclose">✕</button></div>
+      <div class="mdsub">은행·증권 앱의 입출금 알림이나 문자를 복사해 붙여넣으면 계좌와 잔액을 자동으로 찾아줍니다. 내용은 이 기기 밖으로 전송되지 않습니다.</div>
+      <textarea class="in f-paste" rows="4" placeholder="예: [KB] 09/21 입금 1,000,000원 잔액 3,250,000원"></textarea>
+      <button class="skip clipbtn" style="color:var(--accent)">📋 클립보드에서 가져오기</button>
+      <div class="pastenote"></div>
+      <label class="lbl">반영할 계좌·대출</label><select class="in f-target">${targetOpts}</select>
+      <label class="lbl">반영 후 잔액</label><input class="in f-newbal" type="text" inputmode="numeric" placeholder="원" />
+      <label class="lbl">사유 <span>(선택)</span></label><input class="in f-reason" placeholder="예: 급여·입금" />
+      <button class="apply" disabled>잔액 반영</button>`;
+    box.querySelector(".mdclose").onclick=()=>{ ui.modal=null; render(); };
+    const ta=box.querySelector(".f-paste"), note=box.querySelector(".pastenote"), target=box.querySelector(".f-target");
+    const newbal=box.querySelector(".f-newbal"), reasonIn=box.querySelector(".f-reason"), applyBtn=box.querySelector(".apply");
+    attachComma(newbal);
+    newbal.addEventListener("input",()=>{ applyBtn.disabled = newbal.value===""; });
+    let parsed=null;
+    const curOf = v => v[0]==="A" ? ((state.assets.find(x=>"A"+x.id===v)||{}).amount||0) : ((state.loans.find(x=>"L"+x.id===v)||{}).balance||0);
+    // 잔액이 문구에 있으면 그대로, 없으면 현재 금액 ± 거래금액으로 계산
+    const fillBal=()=>{
+      if(!parsed || !target.value) return;
+      let next=null;
+      if(parsed.balance!==null) next=parsed.balance;
+      else if(parsed.txAmount){
+        const cur=curOf(target.value);
+        next = target.value[0]==="L" ? cur-parsed.txAmount : cur+(parsed.txIn?1:-1)*parsed.txAmount;
+        next=Math.max(0,next);
+      }
+      if(next!==null) newbal.value=won(next);
+      applyBtn.disabled = newbal.value==="";
+    };
+    const analyze=()=>{
+      const text=ta.value;
+      if(!text.trim()){ parsed=null; note.textContent=""; return; }
+      parsed=parseNotice(text);
+      const guess=guessTarget(text, parsed.isLoan);
+      if(guess) target.value=guess;
+      if(parsed.reason) reasonIn.value=parsed.reason;
+      const found=[];
+      if(parsed.balance!==null) found.push(`잔액 ${won(parsed.balance)}원`);
+      if(parsed.txAmount) found.push(`${parsed.txKind} ${won(parsed.txAmount)}원`);
+      note.innerHTML = found.length
+        ? `✅ 찾은 내용: <b>${found.join(' · ')}</b>${guess?'':' · 계좌는 직접 골라주세요'}${parsed.balance===null?'<br>잔액 표시가 없어 현재 금액에 거래금액을 더하고 빼서 계산했어요.':''}`
+        : `금액을 찾지 못했어요. 아래에 잔액을 직접 입력해 주세요.`;
+      fillBal();
+    };
+    ta.oninput=analyze;
+    target.onchange=()=>{ if(parsed && parsed.balance===null) fillBal(); };
+    box.querySelector(".clipbtn").onclick=async()=>{
+      try{ ta.value=await navigator.clipboard.readText(); analyze(); }
+      catch(e){ toast("클립보드 접근이 막혀 있어요. 입력창을 길게 눌러 붙여넣으세요", 2600); ta.focus(); }
+    };
+    applyBtn.onclick=()=>{
+      const v=target.value; if(!v || newbal.value==="") return;
+      const next=numVal(newbal), id=Number(v.slice(1));
+      if(next===curOf(v)){ toast("현재 금액과 같아 바꿀 내용이 없어요", 2000); return; }
+      if(v[0]==="A") applyAssetChange(id, next, reasonIn.value.trim());
+      else state.loans=state.loans.map(x=>x.id===id?{...x,balance:next}:x).filter(x=>x.balance>0);
+      ui.modal=null; save(); render();
+    };
+  }
+
+  else if(m.type==="backup"){
+    const last=localStorage.getItem(BACKUP_KEY);
+    box.innerHTML=`
+      <div class="mdhead"><span>백업 · 복원</span><button class="mdclose">✕</button></div>
+      <div class="mdsub">모든 데이터는 이 기기의 브라우저에만 저장됩니다. 브라우저 데이터를 지우거나 기기를 바꾸면 사라지니, 가끔 백업 파일을 받아 두세요.</div>
+      <div class="mdsub">마지막 백업: <b>${last?esc(last):'없음'}</b> · 대출 ${state.loans.length}건 · 자산 ${state.assets.length}건 · 변동내역 ${state.history.length}건</div>
+      <button class="apply doexport">백업 파일 내보내기</button>
+      <button class="skip doimport" style="color:var(--accent)">백업 파일에서 복원하기</button>
+      <input type="file" class="f-file" accept=".json,application/json" style="display:none" />`;
+    box.querySelector(".mdclose").onclick=()=>{ ui.modal=null; render(); };
+    box.querySelector(".doexport").onclick=()=>{
+      const stamp=todayStamp().fullDate;
+      const payload=JSON.stringify({app:"assetmgr", version:1, exportedAt:new Date().toISOString(), data:snapshot()}, null, 2);
+      const a=document.createElement("a");
+      a.href=URL.createObjectURL(new Blob([payload],{type:"application/json"}));
+      a.download=`자산관리-백업-${stamp}.json`;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(()=>URL.revokeObjectURL(a.href), 1000);
+      localStorage.setItem(BACKUP_KEY, stamp);
+      ui.modal=null; render(); toast("백업 파일을 저장했어요", 2000);
+    };
+    const fileIn=box.querySelector(".f-file");
+    box.querySelector(".doimport").onclick=()=>fileIn.click();
+    fileIn.onchange=async()=>{
+      const file=fileIn.files[0]; if(!file) return;
+      try{
+        const obj=JSON.parse(await file.text());
+        const d=(obj && obj.data) ? obj.data : obj;
+        if(!d || !Array.isArray(d.loans) || !Array.isArray(d.assets)) throw new Error("format");
+        const when=obj.exportedAt ? new Date(obj.exportedAt).toLocaleString("ko-KR") : "날짜 미상";
+        if(!confirm(`백업(${when})으로 복원할까요?\n\n복원 내용: 대출 ${d.loans.length}건 · 자산 ${d.assets.length}건\n현재 데이터(대출 ${state.loans.length}건 · 자산 ${state.assets.length}건)는 덮어써집니다.`)) return;
+        state=normalize(d);
+        ui.modal=null; save(true); render(); toast("복원했어요", 2000);
+      }catch(e){ toast("⚠️ 이 앱의 백업 파일이 아니에요", 2600); }
+      fileIn.value="";
+    };
   }
 
   else if(m.type==="lockset"){
@@ -1259,11 +1483,11 @@ function renderModal(){
     };
     const bt=box.querySelector(".biotoggle");
     if(bt) bt.onclick=async()=>{
-      if(bioOn){ localStorage.removeItem(BIO_KEY); ui.modal=null; render(); }
+      if(bioOn){ localStorage.removeItem(BIO_KEY); localStorage.removeItem(BIO_ID_KEY); ui.modal=null; render(); }
       else { ui.modal=null; render(); await offerBiometric(); }
     };
     box.querySelector(".resetpw").onclick=()=>{
-      localStorage.removeItem(PW_KEY); localStorage.removeItem(PIN_KEY); localStorage.removeItem(BIO_KEY);
+      localStorage.removeItem(PW_KEY); localStorage.removeItem(PIN_KEY); localStorage.removeItem(BIO_KEY); localStorage.removeItem(BIO_ID_KEY);
       ui.modal=null; render();
     };
   }
@@ -1296,6 +1520,7 @@ if("serviceWorker" in navigator){
 const PIN_KEY = "assetmgr_pin";
 const PW_KEY = "assetmgr_pw";
 const BIO_KEY = "assetmgr_bio";
+const BIO_ID_KEY = "assetmgr_bio_id";
 async function sha(str){
   const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(str));
   return [...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,"0")).join("");
@@ -1408,22 +1633,27 @@ async function offerBiometric(){
     if(!ok) return;
     const cred=await navigator.credentials.create({
       publicKey:{
-        challenge:new Uint8Array(32),
+        challenge:crypto.getRandomValues(new Uint8Array(32)),
         rp:{name:"자산관리"},
-        user:{id:new Uint8Array(16), name:"user", displayName:"사용자"},
+        user:{id:crypto.getRandomValues(new Uint8Array(16)), name:"user", displayName:"사용자"},
         pubKeyCredParams:[{type:"public-key",alg:-7},{type:"public-key",alg:-257}],
-        authenticatorSelection:{userVerification:"required"},
+        authenticatorSelection:{authenticatorAttachment:"platform", userVerification:"required"},
         timeout:60000
       }
     });
-    if(cred){ localStorage.setItem(BIO_KEY,"1"); }
+    if(cred){
+      localStorage.setItem(BIO_KEY,"1");
+      // 잠금 해제 때 이 기기의 자격증명을 지정할 수 있도록 ID 보관
+      localStorage.setItem(BIO_ID_KEY, btoa(String.fromCharCode(...new Uint8Array(cred.rawId))));
+    }
   }catch(e){ /* 등록 취소/실패 무시 */ }
 }
 async function tryBiometric(){
   try{
-    const res=await navigator.credentials.get({
-      publicKey:{ challenge:new Uint8Array(32), userVerification:"required", timeout:60000 }
-    });
+    const pk={ challenge:crypto.getRandomValues(new Uint8Array(32)), userVerification:"required", timeout:60000 };
+    const savedId=localStorage.getItem(BIO_ID_KEY);
+    if(savedId) pk.allowCredentials=[{type:"public-key", id:Uint8Array.from(atob(savedId),c=>c.charCodeAt(0))}];
+    const res=await navigator.credentials.get({ publicKey:pk });
     if(res) unlock();
   }catch(e){ lockState.err="생체인증에 실패했어요. 비밀번호를 입력하세요"; refreshErr(); }
 }
