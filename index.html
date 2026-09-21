@@ -284,26 +284,9 @@
 
 <script>
 // ═══════════════ 데이터 ═══════════════
-const DEFAULT_LOANS = [
-  { id:1, lender:"SBI저축", balance:48000000, orig:48000000, rate:14.20, type:"원리금", months:60, payDay:15, startYM:"2026-09", firstYM:"2026-08", firstAmount:298783, note:"8월 이자만 298,783원, 9월부터 원리금" },
-  { id:2, lender:"우리금융", balance:9144917, orig:12000000, rate:13.10, type:"원리금", months:12, payDay:1, startYM:"2026-01", note:"" },
-  { id:3, lender:"케이뱅크", balance:5656106, orig:11000000, rate:11.63, type:"원리금", months:12, payDay:2, startYM:"2026-01", note:"" },
-  { id:4, lender:"카카오(3)", balance:2000000, orig:2000000, rate:9.030, type:"이자만", months:0, payDay:10, startYM:"2026-01", note:"만기일시" },
-  { id:5, lender:"광주은행(2)", balance:1424997, orig:1900000, rate:7.53, type:"원리금", months:12, payDay:21, startYM:"2026-01", note:"" },
-  { id:6, lender:"광주은행(1)", balance:2500000, orig:2500000, rate:6.34, type:"이자만", months:0, payDay:1, startYM:"2026-01", note:"만기일시" },
-  { id:7, lender:"카카오(2)", balance:9800000, orig:9800000, rate:6.094, type:"이자만", months:0, payDay:31, startYM:"2026-01", note:"만기일시" },
-  { id:8, lender:"카카오(1)", balance:6100000, orig:6100000, rate:5.688, type:"이자만", months:0, payDay:31, startYM:"2026-01", note:"만기일시" },
-  { id:9, lender:"삼성카드", balance:10000000, orig:10000000, rate:9.90, type:"이자만", months:0, payDay:27, startYM:"2026-01", maturityYM:"2027-07", note:"만기일시 · 2027.7 만기" },
-  { id:10, lender:"지인 차용", balance:10000000, orig:10000000, rate:0, type:"이자만", months:0, payDay:1, startYM:"2026-01", note:"무이자 · 상환일 미정" },
-];
-const DEFAULT_ASSETS = [
-  { id:104, name:"키움 계좌1", kind:"주식", amount:0 },
-  { id:106, name:"키움 계좌2", kind:"주식", amount:0 },
-  { id:101, name:"카카오뱅크", kind:"예금", amount:0 },
-  { id:102, name:"KB국민", kind:"예금", amount:0 },
-  { id:103, name:"우리은행", kind:"예금", amount:0 },
-  { id:105, name:"부산은행", kind:"예금", amount:0 },
-];
+// 개인 금융정보는 코드에 넣지 않는다 (공개 저장소). 데이터는 기기 저장소와 백업 파일에만 보관
+const DEFAULT_LOANS = [];
+const DEFAULT_ASSETS = [];
 const KIND_COLORS = { 주식:"#e8590c", 예금:"#2f9e44", 현금:"#3b5bdb", 기타:"#868e96" };
 // 금융기관 접속 링크 (앱 설치 시 앱으로, 아니면 웹/검색으로 연결)
 const BANK_LINKS = {
@@ -822,6 +805,7 @@ function renderAssets(main, totalAsset){
   const pasteBtn = h(`<button class="pastebtn">📋 은행 알림·문자 붙여넣어 잔액 자동 반영</button>`);
   pasteBtn.onclick=()=>{ ui.modal={type:"paste"}; render(); };
   main.appendChild(pasteBtn);
+  if(!state.assets.length) main.appendChild(h(`<div class="histempty" style="margin-bottom:12px">등록된 계좌가 없습니다.<br>아래 버튼으로 계좌를 추가하거나, 상단 💾에서 백업 파일을 복원하세요.</div>`));
   ["주식","예금","현금","기타"].forEach(kind=>{
     const list = state.assets.filter(a=>a.kind===kind);
     if(!list.length) return;
@@ -1036,6 +1020,7 @@ function renderPriority(main){
 
 function renderAll(main){
   main.appendChild(h(`<div class="hint">👛 전체 대출 ${state.loans.length}건. 상환 완료 시 자동으로 사라집니다.</div>`));
+  if(!state.loans.length) main.appendChild(h(`<div class="histempty" style="margin-bottom:12px">등록된 대출이 없습니다.<br>아래 버튼으로 대출을 추가하거나, 상단 💾에서 백업 파일을 복원하세요.</div>`));
   state.loans.forEach(l=>{
     let matBadge="";
     if(l.maturityYM){
