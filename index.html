@@ -276,6 +276,7 @@
   .pwbarfill { height:100%; width:10%; background:#e8590c; border-radius:3px; transition:all .2s; }
   .pwhint { font-size:11px; color:rgba(255,255,255,.6); margin-top:6px; text-align:center; }
   .pwsubmit { width:100%; max-width:300px; padding:15px; margin-top:6px; background:#fff; color:#12352a; border-radius:13px; font-size:15px; font-weight:700; }
+  .forgotbtn { margin-top:18px; color:rgba(255,255,255,.6); font-size:13px; text-decoration:underline; padding:8px; }
   .biobtn { width:100%; max-width:300px; padding:13px; margin-top:12px; background:rgba(255,255,255,.12); color:#fff; border-radius:13px; font-size:14px; font-weight:600; }
 </style>
 </head>
@@ -1545,6 +1546,7 @@ function renderLock(){
     <div class="pinerr">${lockState.err}</div>
     <button class="pwsubmit">${lockState.mode==='enter'?'잠금 해제':(lockState.mode==='confirm'?'확인':'다음')}</button>
     ${bioBtn}
+    ${lockState.mode==="enter"?`<button class="forgotbtn">비밀번호를 잊으셨나요?</button>`:""}
   </div>`);
 
   const input = lock.querySelector(".pwinput");
@@ -1573,6 +1575,14 @@ function renderLock(){
   submitBtn.onclick=submit;
   input.onkeydown=(e)=>{ if(e.key==="Enter") submit(); };
 
+  const forgot=lock.querySelector(".forgotbtn");
+  if(forgot) forgot.onclick=()=>{
+    // 비밀번호는 해시로만 저장되어 복구할 수 없으므로, 데이터는 그대로 두고 잠금만 새로 설정한다
+    if(!confirm("비밀번호는 복구할 수 없어 새로 설정합니다.\n\n대출·자산 기록은 그대로 유지됩니다.\n계속할까요?")) return;
+    localStorage.removeItem(PW_KEY); localStorage.removeItem(PIN_KEY); localStorage.removeItem(BIO_KEY); localStorage.removeItem(BIO_ID_KEY);
+    lockState={mode:"set",first:"",err:""};
+    lock.remove(); renderLock();
+  };
   const bio=lock.querySelector(".biobtn");
   if(bio) bio.onclick=()=>tryBiometric();
 
